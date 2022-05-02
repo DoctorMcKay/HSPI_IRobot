@@ -7,6 +7,7 @@
 		Stop,
 		UserSentHome,
 		DockingAfterMission,
+		DockingMidMission, // returning to base due to low battery, recharge & resume
 		Evac
 	}
 }

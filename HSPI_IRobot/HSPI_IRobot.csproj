@@ -36,6 +36,9 @@
         <Reference Include="HSCF, Version=1.0.0.2, Culture=neutral, processorArchitecture=MSIL">
           <HintPath>..\packages\HomeSeer-PluginSDK.1.4.0\lib\net462\HSCF.dll</HintPath>
         </Reference>
+        <Reference Include="MQTTnet, Version=3.1.2.0, Culture=neutral, PublicKeyToken=b69712f52770c0a7, processorArchitecture=MSIL">
+          <HintPath>..\packages\MQTTnet.3.1.2\lib\net461\MQTTnet.dll</HintPath>
+        </Reference>
         <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
           <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
         </Reference>
@@ -50,7 +53,11 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="AnalyticsClient.cs" />
+        <Compile Include="Enums\CleanJobPhase.cs" />
+        <Compile Include="Enums\FeatureType.cs" />
+        <Compile Include="Enums\RobotStatus.cs" />
         <Compile Include="HSPI.cs" />
+        <Compile Include="HsRobot.cs" />
         <Compile Include="Program.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

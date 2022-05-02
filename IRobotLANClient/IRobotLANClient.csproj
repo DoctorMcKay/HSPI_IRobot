@@ -48,6 +48,7 @@
         <Compile Include="Enums\MissionCycle.cs" />
         <Compile Include="Enums\MissionPhase.cs" />
         <Compile Include="Enums\MopPadType.cs" />
+        <Compile Include="Enums\RobotType.cs" />
         <Compile Include="Enums\TankStatus.cs" />
         <Compile Include="MqttHandler.cs" />
         <Compile Include="Robot.cs" />
@@ -55,6 +56,7 @@
         <Compile Include="RobotDiscovery.cs" />
         <Compile Include="RobotMop.cs" />
         <Compile Include="RobotVacuum.cs" />
+        <Compile Include="RobotVerifier.cs" />
     </ItemGroup>
     <ItemGroup>
       <None Include="packages.config" />

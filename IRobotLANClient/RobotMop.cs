@@ -9,6 +9,10 @@ namespace IRobotLANClient {
 		
 		public RobotMop(string address, string blid, string password) : base(address, blid, password) { }
 
+		public override bool IsCorrectRobotType() {
+			return ReportedState.ContainsKey("mopReady");
+		}
+
 		protected override void HandleRobotStateUpdate() {
 			bool tankPresent = (bool) ReportedState.SelectToken("mopReady.tankPresent");
 			bool lidClosed = (bool) ReportedState.SelectToken("mopReady.lidClosed");

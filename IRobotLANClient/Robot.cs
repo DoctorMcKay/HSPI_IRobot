@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using IRobotLANClient.Enums;
 using MQTTnet.Client;
 using MQTTnet;
+using MQTTnet.Client.Connecting;
 using MQTTnet.Client.Options;
 using MQTTnet.Formatter;
 using Newtonsoft.Json;
@@ -21,10 +22,12 @@ namespace IRobotLANClient {
 		public MissionPhase Phase { get; private set; }
 		public int ErrorCode { get; private set; }
 		public int NotReadyCode { get; private set; }
+		public bool CanLearnMaps { get; private set; }
 
 		public event EventHandler OnConnected;
 		public event EventHandler OnDisconnected;
 		public event EventHandler OnStateUpdated;
+		public event EventHandler<UnexpectedValueEventArgs> OnUnexpectedValue;
 
 		protected IMqttClient MqttClient;
 		protected readonly string Address;
@@ -40,7 +43,7 @@ namespace IRobotLANClient {
 			Password = password;
 		}
 		
-		public async Task Connect() {
+		public async Task<MqttClientConnectResult> Connect() {
 			MqttFactory factory = new MqttFactory();
 			MqttClient = factory.CreateMqttClient();
 
@@ -68,7 +71,41 @@ namespace IRobotLANClient {
 				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
 			#endif
 
-			await MqttClient.ConnectAsync(clientOptions, CancellationToken.None);
+			return await MqttClient.ConnectAsync(clientOptions, CancellationToken.None);
+		}
+
+		public async Task Disconnect() {
+			if (!MqttClient.IsConnected) {
+				return; // nothing to do
+			}
+
+			await MqttClient.DisconnectAsync();
+		}
+
+		public abstract bool IsCorrectRobotType();
+
+		public void Clean() {
+			SendCommand("start");
+		}
+
+		public void Stop() {
+			SendCommand("stop");
+		}
+		
+		public void Pause() {
+			SendCommand("pause");
+		}
+		
+		public void Resume() {
+			SendCommand("resume");
+		}
+		
+		public void Dock() {
+			SendCommand("dock");
+		}
+		
+		public void Find() {
+			SendCommand("find");
 		}
 
 		protected async void SendCommand(string command) {
@@ -119,7 +156,7 @@ namespace IRobotLANClient {
 #if DEBUG
 			/*
 					 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
-					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), evac
+					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac
 					 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
 					 */
 			Console.WriteLine(string.Format(
@@ -163,7 +200,7 @@ namespace IRobotLANClient {
 					break;
 					
 				default:
-					Console.WriteLine($"WARNING: Unknown mission cycle {missionCycle}");
+					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionCycle", Value = missionCycle});
 					Cycle = MissionCycle.Unknown;
 					break;
 			}
@@ -192,12 +229,17 @@ namespace IRobotLANClient {
 				case "hmPostMsn":
 					Phase = MissionPhase.DockingAfterMission;
 					break;
+				
+				case "hmMidMsn":
+					Phase = MissionPhase.DockingMidMission;
+					break;
 					
 				case "evac":
 					Phase = MissionPhase.Evac;
 					break;
 					
 				default:
+					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionPhase", Value = missionPhase});
 					Console.WriteLine($"WARNING: Unknown mission phase {missionPhase}");
 					Phase = MissionPhase.Unknown;
 					break;
@@ -205,6 +247,7 @@ namespace IRobotLANClient {
 				
 			ErrorCode = (int) ReportedState.SelectToken("cleanMissionStatus.error");
 			NotReadyCode = (int) ReportedState.SelectToken("cleanMissionStatus.notReady");
+			CanLearnMaps = (bool) ReportedState.SelectToken("pmapLearningAllowed");
 			
 			HandleRobotStateUpdate();
 			
@@ -229,6 +272,11 @@ namespace IRobotLANClient {
 
 		public JObject GetFullStatus() {
 			return ReportedState;
+		}
+
+		public class UnexpectedValueEventArgs : EventArgs {
+			public string ValueType { get; internal set; }
+			public string Value { get; internal set; }
 		}
 	}
 }

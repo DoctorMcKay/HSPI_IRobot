@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -9,6 +10,7 @@ using Newtonsoft.Json.Linq;
 namespace IRobotLANClient {
 	public class RobotDiscovery {
 		public event EventHandler<DiscoveredRobot> OnRobotDiscovered;
+		public List<DiscoveredRobot> DiscoveredRobots = new List<DiscoveredRobot>();
 
 		public void Discover() {
 			foreach (NetworkInterface iface in NetworkInterface.GetAllNetworkInterfaces()) {
@@ -27,6 +29,7 @@ namespace IRobotLANClient {
 					uint broadcastAddress = addressLong | ~netMask;
 
 					UdpClient client = new UdpClient();
+					client.EnableBroadcast = true;
 					client.Client.ReceiveTimeout = 5000;
 					client.Client.Bind(new IPEndPoint(address.Address, 0));
 
@@ -48,6 +51,7 @@ namespace IRobotLANClient {
 									Sku = (string) payload.SelectToken("sku")
 								};
 
+								DiscoveredRobots.Add(robotMetadata);
 								OnRobotDiscovered?.Invoke(this, robotMetadata);
 							}
 						} catch (SocketException) {

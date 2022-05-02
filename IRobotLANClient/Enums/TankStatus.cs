@@ -1,7 +1,7 @@
 ﻿namespace IRobotLANClient.Enums {
-	public enum TankStatus {
-		Ok,
-		Empty,
-		LidOpen
+	public enum TankStatus : int {
+		Ok = 0,
+		Empty = 1,
+		LidOpen = 2
 	}
 }
