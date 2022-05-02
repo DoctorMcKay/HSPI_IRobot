@@ -22,12 +22,16 @@ namespace IRobotLANClient {
 		public int ErrorCode { get; private set; }
 		public int NotReadyCode { get; private set; }
 
+		public event EventHandler OnConnected;
+		public event EventHandler OnDisconnected;
+		public event EventHandler OnStateUpdated;
+
 		protected IMqttClient MqttClient;
 		protected readonly string Address;
 		protected readonly string Blid;
 		protected readonly string Password;
 
-		protected JObject ReportedState = new JObject();
+		protected readonly JObject ReportedState = new JObject();
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -203,6 +207,8 @@ namespace IRobotLANClient {
 			NotReadyCode = (int) ReportedState.SelectToken("cleanMissionStatus.notReady");
 			
 			HandleRobotStateUpdate();
+			
+			OnStateUpdated?.Invoke(this, null);
 		}
 
 		protected abstract void HandleRobotStateUpdate();
@@ -213,6 +219,12 @@ namespace IRobotLANClient {
 			#if DEBUG
 				Console.WriteLine("MQTT client " + (connected ? "connected" : "disconnected"));
 			#endif
+
+			if (connected) {
+				OnConnected?.Invoke(this, null);
+			} else {
+				OnDisconnected?.Invoke(this, null);
+			}
 		}
 
 		public JObject GetFullStatus() {
