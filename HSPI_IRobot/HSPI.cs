@@ -33,6 +33,8 @@ namespace HSPI_IRobot {
 
 			Settings.Add(settingsPageFactory.Page);
 			
+			HomeSeerSystem.RegisterDeviceIncPage(Id, "robots.html", "Manage Robots");
+			
 			analytics.ReportIn(5000);
 		}
 		
