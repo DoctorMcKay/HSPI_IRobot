@@ -156,7 +156,7 @@ namespace IRobotLANClient {
 #if DEBUG
 			/*
 					 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
-					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac
+					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
 					 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
 					 */
 			Console.WriteLine(string.Format(
@@ -237,10 +237,13 @@ namespace IRobotLANClient {
 				case "evac":
 					Phase = MissionPhase.Evac;
 					break;
+				
+				case "chargingerror":
+					Phase = MissionPhase.ChargingError;
+					break;
 					
 				default:
 					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionPhase", Value = missionPhase});
-					Console.WriteLine($"WARNING: Unknown mission phase {missionPhase}");
 					Phase = MissionPhase.Unknown;
 					break;
 			}

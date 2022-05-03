@@ -55,7 +55,9 @@
         <Compile Include="AnalyticsClient.cs" />
         <Compile Include="Enums\CleanJobPhase.cs" />
         <Compile Include="Enums\FeatureType.cs" />
+        <Compile Include="Enums\InternalError.cs" />
         <Compile Include="Enums\RobotStatus.cs" />
+        <Compile Include="FeatureUpdater.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />
         <Compile Include="Program.cs" />

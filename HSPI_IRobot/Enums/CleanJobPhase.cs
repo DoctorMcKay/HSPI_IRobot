@@ -5,6 +5,7 @@
 		Charging = 2,
 		Evac = 3,
 		LowBatteryReturningToDock = 4,
-		DoneReturningToDock = 5
+		DoneReturningToDock = 5,
+		ChargingError = 6
 	}
 }

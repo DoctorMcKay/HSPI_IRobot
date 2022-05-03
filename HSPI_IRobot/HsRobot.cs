@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Timers;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
@@ -10,6 +11,7 @@ using IRobotLANClient.Enums;
 namespace HSPI_IRobot {
 	public class HsRobot {
 		public HsRobotState State { get; private set; } = HsRobotState.Disconnected;
+		public HsRobotCannotConnectReason CannotConnectReason { get; private set; } = HsRobotCannotConnectReason.None;
 		public string StateString { get; private set; } = "Connecting";
 		public string ConnectedIp { get; private set; }
 		public Robot Robot { get; private set; } = null;
@@ -21,7 +23,9 @@ namespace HSPI_IRobot {
 		private readonly HSPI _plugin;
 		private bool _robotTypeFailedValidation = false;
 		private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
+		private Timer _reconnectTimer = null;
 
+		public event EventHandler OnConnectStateUpdated;
 		public event EventHandler OnRobotStatusUpdated;
 
 		public HsRobot(HSPI plugin, HsDevice hsDevice) {
@@ -38,11 +42,12 @@ namespace HSPI_IRobot {
 				return;
 			}
 			
-			State = HsRobotState.Connecting;
-			StateString = "Connecting";
-			
+			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.None, "Connecting");
+
 			string lastKnownIp = HsDevice.PlugExtraData["lastknownip"];
 			string connectIp = ip ?? lastKnownIp;
+			
+			_plugin.WriteLog(ELogType.Debug, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
 			Robot robot;
 			if (Type == RobotType.Vacuum) {
@@ -60,8 +65,12 @@ namespace HSPI_IRobot {
 				string discoveredRobotIp = await FindRobot();
 				if (discoveredRobotIp == null || discoveredRobotIp == connectIp) {
 					// Either we couldn't discover the robot, or it has the same IP as we already tried
-					State = HsRobotState.CannotConnect;
-					StateString = discoveredRobotIp == connectIp ? "Robot credentials are incorrect" : "Robot was not found on the network";
+					UpdateState(
+						HsRobotState.CannotConnect,
+						discoveredRobotIp == connectIp ? HsRobotCannotConnectReason.DiscoveredCannotConnect : HsRobotCannotConnectReason.CannotDiscover,
+						discoveredRobotIp == connectIp ? " Robot credentials are incorrect" : "Robot was not found on the network"
+					);
+					EnqueueReconnectAttempt();
 					return;
 				}
 				
@@ -74,10 +83,14 @@ namespace HSPI_IRobot {
 			DateTime dataUpdateWaitStart = DateTime.Now;
 			while (DateTime.Now.Subtract(dataUpdateWaitStart).TotalSeconds < 5) {
 				if (_robotTypeFailedValidation) {
-					State = HsRobotState.CannotConnect;
-					StateString = "Robot credentials are correct, but are not for the expected type of robot";
-				} else if (Robot != null) {
+					UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Robot credentials are correct, but are not for the expected type of robot");
+					EnqueueReconnectAttempt();
+					return;
+				}
+				
+				if (Robot != null) {
 					// We passed validation
+					UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.None, "OK");
 					ConnectedIp = connectIp;
 					Robot.OnDisconnected += HandleDisconnect;
 					Robot.OnUnexpectedValue += HandleUnexpectedValue;
@@ -88,9 +101,9 @@ namespace HSPI_IRobot {
 				await Task.Delay(100);
 			}
 
-			State = HsRobotState.CannotConnect;
-			StateString = "Timed out waiting on validation of robot type";
+			UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Timed out waiting on validation of robot type");
 			await robot.Disconnect();
+			EnqueueReconnectAttempt();
 		}
 
 		private async Task<string> FindRobot() {
@@ -118,6 +131,29 @@ namespace HSPI_IRobot {
 			return null;
 		}
 
+		private void EnqueueReconnectAttempt() {
+			_reconnectTimer?.Stop();
+			_reconnectTimer = new Timer {
+				AutoReset = false,
+				Enabled = true,
+				Interval = 30000 // 30 seconds
+			};
+
+			_reconnectTimer.Elapsed += async (src, arg) => {
+				_reconnectTimer.Dispose();
+				_reconnectTimer = null;
+
+				await AttemptConnect();
+			};
+		}
+
+		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
+			State = state;
+			CannotConnectReason = cannotConnectReason;
+			StateString = stateString;
+			OnConnectStateUpdated?.Invoke(this, null);
+		}
+
 		private void HandleDataUpdate(object src, EventArgs arg) {
 			if (Robot == null) {
 				Robot srcRobot = (Robot) src;
@@ -139,13 +175,10 @@ namespace HSPI_IRobot {
 			Robot.OnDisconnected -= HandleDisconnect;
 
 			_plugin.WriteLog(ELogType.Warning, $"Disconnected from robot {Robot.Name}");
-			State = HsRobotState.Disconnected;
-			StateString = "Disconnected";
+			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.None, "Disconnected");
 
 			await Task.Delay(1000);
 			await AttemptConnect();
-			
-			// TODO auto-reconnect attempts if we aren't able to reconnect immediately
 		}
 
 		private void HandleUnexpectedValue(object src, Robot.UnexpectedValueEventArgs arg) {
@@ -159,6 +192,10 @@ namespace HSPI_IRobot {
 
 			HsFeature feature = _plugin.GetHsController().GetFeatureByAddress($"{Blid}:{type}");
 			_features.Add(type, feature);
+
+			FeatureUpdater updater = new FeatureUpdater(_plugin);
+			updater.ExecuteFeatureUpdates(feature);
+			
 			return feature;
 		}
 
@@ -167,6 +204,13 @@ namespace HSPI_IRobot {
 			Connected,
 			Disconnected,
 			CannotConnect
+		}
+
+		public enum HsRobotCannotConnectReason {
+			None,
+			CannotDiscover,
+			DiscoveredCannotConnect,
+			CannotValidateType
 		}
 	}
 }

@@ -56,7 +56,6 @@ namespace IRobotLANClient {
 							}
 						} catch (SocketException) {
 							// Receive probably timed out, so we can close the client now
-							Console.WriteLine("Disposing client");
 							client.Dispose();
 						}
 					});

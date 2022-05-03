@@ -59,26 +59,30 @@ namespace HSPI_IRobot {
 			_hsRobots = new List<HsRobot>();
 
 			await Task.WhenAll(HomeSeerSystem.GetRefsByInterface(Id, true).Select(deviceRef => Task.Run(async () => {
-				HsDevice device = HomeSeerSystem.GetDeviceByRef(deviceRef);
-				HsRobot robot = new HsRobot(this, device);
-				_hsRobots.Add(robot);
-
-				robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
-
-				await robot.AttemptConnect();
-				string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
-				WriteLog(ELogType.Info, $"Connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
-
-				if (robot.State == HsRobot.HsRobotState.Connected) {
-					PlugExtraData extraData = device.PlugExtraData;
-					extraData["lastknownip"] = robot.ConnectedIp;
-					HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, extraData);
-				}
+				await InitializeDevice(HomeSeerSystem.GetDeviceByRef(deviceRef));
 			})).ToList());
 
 			int countRobots = _hsRobots.Count;
 			int connectedRobots = _hsRobots.FindAll(robot => robot.State == HsRobot.HsRobotState.Connected).Count;
 			WriteLog(ELogType.Info, $"All devices initialized. Found {countRobots} robots and {connectedRobots} connected successfully");
+		}
+
+		private async Task InitializeDevice(HsDevice device) {
+			HsRobot robot = new HsRobot(this, device);
+			_hsRobots.Add(robot);
+
+			robot.OnConnectStateUpdated += HandleRobotConnectionStateUpdate;
+			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
+
+			await robot.AttemptConnect();
+			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
+			WriteLog(ELogType.Info, $"Connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
+
+			if (robot.State == HsRobot.HsRobotState.Connected) {
+				PlugExtraData extraData = device.PlugExtraData;
+				extraData["lastknownip"] = robot.ConnectedIp;
+				HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, extraData);
+			}
 		}
 
 		public override void SetIOMulti(List<ControlEvent> colSend) {
@@ -125,6 +129,43 @@ namespace HSPI_IRobot {
 
 						break;
 				}
+			}
+		}
+
+		private void HandleRobotConnectionStateUpdate(object src, EventArgs arg) {
+			HsRobot robot = (HsRobot) src;
+			WriteLog(ELogType.Debug, $"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}");
+
+			HsFeature errorFeature = robot.GetFeature(FeatureType.Error);
+
+			switch (robot.State) {
+				case HsRobot.HsRobotState.Connected:
+					HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.None);
+					break;
+				
+				case HsRobot.HsRobotState.Disconnected:
+					HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.DisconnectedFromRobot);
+					break;
+				
+				case HsRobot.HsRobotState.CannotConnect:
+					switch (robot.CannotConnectReason) {
+						case HsRobot.HsRobotCannotConnectReason.CannotDiscover:
+							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.CannotDiscoverRobot);
+							break;
+						
+						case HsRobot.HsRobotCannotConnectReason.DiscoveredCannotConnect:
+						case HsRobot.HsRobotCannotConnectReason.CannotValidateType:
+							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.CannotConnectToMqtt);
+							break;
+						
+						default:
+							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.DisconnectedFromRobot);
+							break;
+					}
+
+					break;
+				
+				// We purposefully don't have a default case because we don't want to update the error feature value when reconnecting
 			}
 		}
 
@@ -201,6 +242,10 @@ namespace HSPI_IRobot {
 						case MissionPhase.DockingAfterMission:
 						case MissionPhase.UserSentHome:
 							jobPhase = CleanJobPhase.DoneReturningToDock;
+							break;
+						
+						case MissionPhase.ChargingError:
+							jobPhase = CleanJobPhase.ChargingError;
 							break;
 						
 						default:
@@ -424,6 +469,9 @@ namespace HSPI_IRobot {
 
 			PlugExtraData versionExtraData = new PlugExtraData();
 			versionExtraData.AddNamed("version", "1");
+
+			PlugExtraData versionTwoExtraData = new PlugExtraData();
+			versionTwoExtraData.AddNamed("version", "2");
 			
 			DeviceFactory factory = DeviceFactory.CreateDevice(Id)
 				.WithName(verifier.Name)
@@ -459,6 +507,7 @@ namespace HSPI_IRobot {
 					.AddGraphicForValue("/images/HomeSeer/status/eject.png", (double) CleanJobPhase.Evac, "Emptying Bin")
 					.AddGraphicForValue("/images/HomeSeer/status/batterytoolowtooperatelock.png", (double) CleanJobPhase.LowBatteryReturningToDock, "Returning to Home Base to Recharge")
 					.AddGraphicForValue("/images/HomeSeer/status/replay.png", (double) CleanJobPhase.DoneReturningToDock, "Finished, Returning To Home Base")
+					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) CleanJobPhase.ChargingError, "Charging Error")
 				)
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Battery")
@@ -532,15 +581,21 @@ namespace HSPI_IRobot {
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Error")
 					.WithAddress($"{blid}:Error")
-					.WithExtraData(versionExtraData)
+					.WithExtraData(versionTwoExtraData)
 					.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "No Error")
 					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 1, 255)
+					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.DisconnectedFromRobot, "Disconnected from robot")
+					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotDiscoverRobot, "Robot not found on network")
+					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot")
 				);
 
 			int newDeviceRef = HomeSeerSystem.CreateDevice(factory.PrepareForHs());
 			WriteLog(ELogType.Info, $"Created new device {newDeviceRef} for {verifier.DetectedType} robot {verifier.Name} ({blid})");
 
 			if (verifier.DetectedType == RobotType.Vacuum) {
+				// Not all vacuums can self-empty their bins, but definitely no mops can so this is good enough
+				// There isn't a good way to definitively tell if a robot supports self-empty unless it's presently
+				// on a self-empty dock.
 				HomeSeerSystem.AddStatusControlToFeature(
 					HomeSeerSystem.GetFeatureByAddress($"{blid}:Status").Ref,
 					new StatusControl(EControlType.Button) { Label = "Empty Bin", TargetValue = (double) RobotStatus.Evac }
@@ -554,11 +609,7 @@ namespace HSPI_IRobot {
 				);
 			}
 
-			HsRobot robot = new HsRobot(this, HomeSeerSystem.GetDeviceByRef(newDeviceRef));
-			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
-			await robot.AttemptConnect();
-
-			_hsRobots.Add(robot);
+			await InitializeDevice(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
 		}
 
 		public IHsController GetHsController() {
