@@ -37,8 +37,8 @@ jobs:
       run: |
         mkdir artifacts-debug
         cp HSPI_IRobot\bin\Debug\HSPI_IRobot.exe "artifacts-debug\HSPI_IRobot.exe"
-        cp HSPI_IRobot\bin\Debug\*.dll artifacts
-        cp html\*.* artifacts
+        cp HSPI_IRobot\bin\Debug\*.dll artifacts-debug
+        cp html\*.* artifacts-debug
         cp HSPI_IRobot.exe.config artifacts-debug\HSPI_IRobot.exe.config
     
     - name: Upload artifacts
