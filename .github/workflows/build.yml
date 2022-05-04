@@ -30,7 +30,7 @@ jobs:
         cp HSPI_IRobot\bin\Release\HSPI_IRobot.exe artifacts\HSPI_IRobot.exe
         cp HSPI_IRobot\bin\Release\*.dll artifacts
         cp HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
-        cp HSPI_IRobot\html\*.* artifacts
+        cp html\*.* artifacts
         cp install.txt artifacts\install.txt
     
     - name: Stage debug artifacts
@@ -38,7 +38,7 @@ jobs:
         mkdir artifacts-debug
         cp HSPI_IRobot\bin\Debug\HSPI_IRobot.exe "artifacts-debug\HSPI_IRobot.exe"
         cp HSPI_IRobot\bin\Debug\*.dll artifacts
-        cp HSPI_IRobot\html\*.* artifacts
+        cp html\*.* artifacts
         cp HSPI_IRobot.exe.config artifacts-debug\HSPI_IRobot.exe.config
     
     - name: Upload artifacts
