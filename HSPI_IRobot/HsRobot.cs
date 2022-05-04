@@ -68,7 +68,7 @@ namespace HSPI_IRobot {
 					UpdateState(
 						HsRobotState.CannotConnect,
 						discoveredRobotIp == connectIp ? HsRobotCannotConnectReason.DiscoveredCannotConnect : HsRobotCannotConnectReason.CannotDiscover,
-						discoveredRobotIp == connectIp ? " Robot credentials are incorrect" : "Robot was not found on the network"
+						discoveredRobotIp == connectIp ? "Robot credentials are incorrect or another app is already connected" : "Robot was not found on the network"
 					);
 					EnqueueReconnectAttempt();
 					return;
