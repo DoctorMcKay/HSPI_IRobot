@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using System.Timers;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Logging;
@@ -11,6 +13,7 @@ using Newtonsoft.Json;
 namespace HSPI_IRobot {
 	public class AnalyticsClient {
 		private const string ReportUrl = "https://hsstats.doctormckay.com/report.php";
+		private const string ErrorReportUrl = "https://hsstats.doctormckay.com/error.php";
 		private const string GlobalIniFilename = "DrMcKayGlobal.ini";
 
 		public string CustomSystemId {
@@ -31,6 +34,42 @@ namespace HSPI_IRobot {
 		public AnalyticsClient(HSPI plugin, IHsController hs) {
 			_plugin = plugin;
 			_hs = hs;
+
+			if (!Debugger.IsAttached) {
+				AppDomain.CurrentDomain.UnhandledException += (_, args) => {
+					ReportException((Exception) args.ExceptionObject);
+				};
+
+				TaskScheduler.UnobservedTaskException += (_, args) => {
+					ReportException(args.Exception);
+				};
+			}
+		}
+
+		private void ReportException(Exception exception) {
+			// We want to run this synchronously
+			Task.Run(async () => {
+				try {
+					ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+
+					HttpClient client = new HttpClient();
+					HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ErrorReportUrl) {
+						Content = new StringContent(JsonConvert.SerializeObject(new {
+							AnalyticsData = _gatherData(),
+							Exception = exception
+						}), Encoding.UTF8, "application/json")
+					};
+
+					HttpResponseMessage res = await client.SendAsync(req);
+
+					req.Dispose();
+					res.Dispose();
+					client.Dispose();
+				} finally {
+					// re-throw the exception
+					throw exception;
+				}
+			}).Wait();
 		}
 
 		public void ReportIn(int milliseconds) {
@@ -79,7 +118,7 @@ namespace HSPI_IRobot {
 		
 		private AnalyticsData _gatherData() {
 			return new AnalyticsData {
-				CustomSystemId = this.CustomSystemId,
+				CustomSystemId = CustomSystemId,
 				PluginId = _plugin.Id,
 				PluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString(),
 				SystemEnvironmentVersion = Environment.Version.ToString(),
