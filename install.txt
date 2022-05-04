@@ -1,0 +1,8 @@
+HSPI_IRobot.exe,.,0
+HSPI_IRobot.exe.config,.,0
+HSCF.dll,.\bin\iRobot,0
+IRobotLANClient.dll,.\bin\iRobot,0
+MQTTnet.dll,.\bin\iRobot,0
+Newtonsoft.Json.dll,.\bin\iRobot,0
+PluginSdk.dll,.\bin\iRobot,0
+robots.html,.\html\iRobot,0
