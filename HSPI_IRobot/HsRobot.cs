@@ -169,8 +169,6 @@ namespace HSPI_IRobot {
 				if (srcRobot.IsCorrectRobotType()) {
 					// All seems good!
 					Robot = srcRobot;
-					State = HsRobotState.Connected;
-					StateString = "OK";
 				} else {
 					_robotTypeFailedValidation = true;
 					return;
