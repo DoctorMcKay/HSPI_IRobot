@@ -24,6 +24,11 @@ namespace HSPI_IRobot {
 		private bool _robotTypeFailedValidation = false;
 		private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
 		private Timer _reconnectTimer = null;
+		private Timer _stateUpdateDebounceTimer = null;
+		
+		// These properties are used for correcting the robot's erroneous phase change from "charge" to "run" when ending a job
+		private DateTime _lastDockToChargeTransition = DateTime.Now;
+		private MissionPhase _lastObservedMissionPhase = MissionPhase.Unknown;
 
 		public event EventHandler OnConnectStateUpdated;
 		public event EventHandler OnRobotStatusUpdated;
@@ -168,10 +173,55 @@ namespace HSPI_IRobot {
 					StateString = "OK";
 				} else {
 					_robotTypeFailedValidation = true;
+					return;
 				}
 			}
+			
+			// When a robot's state updates, especially when docking after a job is finished, it's possible for it to
+			// rapidly flip between multiple different states. It has been observed that when a robot docks, it rapidly
+			// flips between Clean/UserSentHome to Clean/Stop to Clean/UserSentHome to Clean/Charge to Clean/Run to Clean/Charge
+			// to Clean/Run and finally to None/Charge. All of these rapid updates can cause problems in events, so let's
+			// debounce updates by waiting until the last update we received was 500ms ago.
+			
+			// In my experience, these rapid changes all take place within 11ms of each other, so 500ms should be more
+			// than enough time to wait. The final Clean/Run to None/Charge transition can take multiple seconds though,
+			// so we need a special case to handle that. Also, when starting a job it can take ~300ms for the phase to
+			// go from Charge to Run.
 
-			OnRobotStatusUpdated?.Invoke(this, null);
+			if (
+				Robot.Phase == MissionPhase.Charge
+				&& (
+					_lastObservedMissionPhase == MissionPhase.DockingAfterMission
+					|| _lastObservedMissionPhase == MissionPhase.DockingMidMission
+					|| _lastObservedMissionPhase == MissionPhase.UserSentHome
+				)
+			) {
+				// We went from docking to charging
+				_lastDockToChargeTransition = DateTime.Now;
+			}
+
+			double debounceTimerInterval = 500;
+			
+			if (Robot.Phase == MissionPhase.Run && DateTime.Now.Subtract(_lastDockToChargeTransition).TotalSeconds <= 1) {
+				// Our new phase is run, but we just saw the robot dock under 1s ago. It's unlikely that the robot
+				// immediately went back to running right after docking, so this is probably the robot issue we see where
+				// it goes to Clean/Run for ~5 seconds before going to None/NoJob. Increase our debounce timer to 10s.
+				// If the cycle changes to None within ~5s as we expect, it'll overwrite the debounce timer to 500ms
+				debounceTimerInterval = 10000;
+			}
+
+			_lastObservedMissionPhase = Robot.Phase;
+
+			_stateUpdateDebounceTimer?.Stop();
+			_stateUpdateDebounceTimer = new Timer {
+				AutoReset = false,
+				Enabled = true,
+				Interval = debounceTimerInterval
+			};
+			_stateUpdateDebounceTimer.Elapsed += (sender, args) => {
+				_stateUpdateDebounceTimer = null;
+				OnRobotStatusUpdated?.Invoke(this, null);
+			};
 		}
 
 		private async void HandleDisconnect(object src, EventArgs arg) {

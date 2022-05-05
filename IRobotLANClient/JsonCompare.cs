@@ -34,8 +34,9 @@ namespace IRobotLANClient {
 				}
 
 				if (prop.Value.Type != token2.Type || prop.Value.ToString() != token2.ToString()) {
-					output.Add($"{path}{prop.Path}: \"{prop.Value}\" -> \"{token2.Value<string>()}\"");
-				}
+					string val1 = prop.Value.ToString().Replace("\n", "").Replace("\r", "");
+					string val2 = token2.ToString().Replace("\n", "").Replace("\r", "");
+					output.Add($"{path}{prop.Path}: \"{val1}\" -> \"{val2}\""); }
 			}
 
 			return output;
