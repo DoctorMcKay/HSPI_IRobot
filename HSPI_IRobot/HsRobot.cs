@@ -57,6 +57,9 @@ namespace HSPI_IRobot {
 			}
 			
 			robot.OnStateUpdated += HandleDataUpdate;
+			robot.OnDebugOutput += (sender, args) => {
+				_plugin.WriteLog(ELogType.Trace, $"[{robot.Name ?? Blid}] {args.Output}");
+			};
 
 			try {
 				await robot.Connect();

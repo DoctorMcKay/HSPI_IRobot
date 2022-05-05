@@ -28,6 +28,7 @@ namespace IRobotLANClient {
 		public event EventHandler OnDisconnected;
 		public event EventHandler OnStateUpdated;
 		public event EventHandler<UnexpectedValueEventArgs> OnUnexpectedValue;
+		public event EventHandler<DebugOutputEventArgs> OnDebugOutput;
 
 		protected IMqttClient MqttClient;
 		protected readonly string Address;
@@ -143,11 +144,18 @@ namespace IRobotLANClient {
 				// This shouldn't ordinarily happen, but in case it does...
 				return;
 			}
+			
+			// First let's find the differences between the two objects for debugging purposes
+			JObject previousReportedState = JObject.Parse(ReportedState.ToString());
 				
 			foreach (JProperty prop in stateUpdate.Properties()) {
 				ReportedState[prop.Name] = prop.Value;
 			}
-				
+
+			foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
+				DebugOutput(change);
+			}
+
 			Name = (string) ReportedState.SelectToken("name");
 			Sku = (string) ReportedState.SelectToken("sku");
 			BatteryLevel = (byte) ReportedState.SelectToken("batPct");
@@ -277,9 +285,17 @@ namespace IRobotLANClient {
 			return ReportedState;
 		}
 
+		protected void DebugOutput(string output) {
+			OnDebugOutput?.Invoke(this, new DebugOutputEventArgs { Output = output });
+		}
+
 		public class UnexpectedValueEventArgs : EventArgs {
 			public string ValueType { get; internal set; }
 			public string Value { get; internal set; }
+		}
+
+		public class DebugOutputEventArgs : EventArgs {
+			public string Output { get; internal set; }
 		}
 	}
 }

@@ -50,6 +50,7 @@
         <Compile Include="Enums\MopPadType.cs" />
         <Compile Include="Enums\RobotType.cs" />
         <Compile Include="Enums\TankStatus.cs" />
+        <Compile Include="JsonCompare.cs" />
         <Compile Include="MqttHandler.cs" />
         <Compile Include="Robot.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
