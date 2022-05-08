@@ -157,14 +157,13 @@ namespace IRobotLANClient {
 					#if DEBUG
 						Console.WriteLine("Pong received");
 					#endif
-				} catch (Exception ex) {
+				} catch (Exception) {
 					// We don't have to actually do anything with this exception. The MqttClient will realize that it
 					// never received an ack of this transmission and fire the Disconnected handler on its own. We just
 					// needed to send something for it to expect an ack.
 					
 					#if DEBUG
 						Console.WriteLine("Ping response failed");
-						Console.WriteLine(ex);
 					#endif
 				}
 
