@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Security.Authentication;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using IRobotLANClient.Enums;
@@ -10,6 +11,7 @@ using MQTTnet.Client.Options;
 using MQTTnet.Formatter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Timer = System.Timers.Timer;
 
 namespace IRobotLANClient {
 	public abstract class Robot {
@@ -36,6 +38,9 @@ namespace IRobotLANClient {
 		protected readonly string Password;
 
 		protected readonly JObject ReportedState = new JObject();
+		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
+
+		private Timer _pingTimer = null;
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -72,7 +77,7 @@ namespace IRobotLANClient {
 				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
 			#endif
 
-			return await MqttClient.ConnectAsync(clientOptions, CancellationToken.None);
+			return await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
 		}
 
 		public async Task Disconnect() {
@@ -118,10 +123,58 @@ namespace IRobotLANClient {
 				initiator = "localApp"
 			});
 
-			await MqttClient.PublishAsync("cmd", payload);
+			MqttApplicationMessage msg = new MqttApplicationMessage() {
+				Topic = "cmd",
+				Payload = Encoding.UTF8.GetBytes(payload)
+			};
+
+			try {
+				await MqttClient.PublishAsync(msg, CancellationTokenSource.Token);
+			} catch (Exception) {
+				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
+			}
+		}
+
+		private void EnqueuePing() {
+			_pingTimer?.Stop();
+			_pingTimer = new Timer {
+				AutoReset = false,
+				Enabled = true,
+				Interval = 10000
+			};
+			
+			// Under normal circumstances, we wouldn't expect the 10s interval to elapse and thus we wouldn't actually
+			// send any pings. The "wifistat" topic gets published to very frequently, at least every 10s.
+			
+			_pingTimer.Elapsed += async (sender, args) => {
+				#if DEBUG
+					Console.WriteLine("Sending ping");
+				#endif
+
+				try {
+					await MqttClient.PingAsync(CancellationTokenSource.Token);
+					
+					#if DEBUG
+						Console.WriteLine("Pong received");
+					#endif
+				} catch (Exception ex) {
+					// We don't have to actually do anything with this exception. The MqttClient will realize that it
+					// never received an ack of this transmission and fire the Disconnected handler on its own. We just
+					// needed to send something for it to expect an ack.
+					
+					#if DEBUG
+						Console.WriteLine("Ping response failed");
+						Console.WriteLine(ex);
+					#endif
+				}
+
+				EnqueuePing();
+			};
 		}
 
 		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
+			EnqueuePing();
+			
 			string jsonPayload = System.Text.Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
@@ -278,6 +331,8 @@ namespace IRobotLANClient {
 				OnConnected?.Invoke(this, null);
 			} else {
 				OnDisconnected?.Invoke(this, null);
+				_pingTimer?.Stop();
+				CancellationTokenSource.Cancel(); // also cancel any outstanding comunication
 			}
 		}
 
