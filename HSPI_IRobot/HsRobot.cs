@@ -52,7 +52,7 @@ namespace HSPI_IRobot {
 			string lastKnownIp = HsDevice.PlugExtraData["lastknownip"];
 			string connectIp = ip ?? lastKnownIp;
 			
-			_plugin.WriteLog(ELogType.Debug, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
+			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
 			Robot robot;
 			if (Type == RobotType.Vacuum) {
