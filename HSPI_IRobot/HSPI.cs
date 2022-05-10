@@ -76,7 +76,7 @@ namespace HSPI_IRobot {
 
 			await robot.AttemptConnect();
 			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
-			WriteLog(ELogType.Info, $"Connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
+			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
 				PlugExtraData extraData = device.PlugExtraData;
@@ -134,7 +134,10 @@ namespace HSPI_IRobot {
 
 		private void HandleRobotConnectionStateUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
-			WriteLog(ELogType.Debug, $"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}");
+			WriteLog(
+				robot.State == HsRobot.HsRobotState.Connecting || robot.State == HsRobot.HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
+				$"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}"
+			);
 
 			HsFeature errorFeature = robot.GetFeature(FeatureType.Error);
 
