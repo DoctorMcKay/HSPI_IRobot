@@ -37,7 +37,7 @@ namespace IRobotLANClient {
 		protected readonly string Blid;
 		protected readonly string Password;
 
-		protected readonly JObject ReportedState = new JObject();
+		protected JObject ReportedState = new JObject();
 		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
 		private Timer _pingTimer = null;
@@ -77,7 +77,10 @@ namespace IRobotLANClient {
 				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
 			#endif
 
-			return await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
+			MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
+			ReportedState = new JObject(); // Reset reported state
+
+			return result;
 		}
 
 		public async Task Disconnect() {
