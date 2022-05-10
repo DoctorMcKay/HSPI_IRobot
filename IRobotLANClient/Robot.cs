@@ -122,7 +122,7 @@ namespace IRobotLANClient {
 
 			string payload = JsonConvert.SerializeObject(new {
 				command,
-				time = (long) DateTime.Now.Subtract(unixEpoch).TotalMilliseconds,
+				time = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds,
 				initiator = "localApp"
 			});
 
