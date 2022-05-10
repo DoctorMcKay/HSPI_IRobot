@@ -595,6 +595,13 @@ namespace HSPI_IRobot {
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotDiscoverRobot, "Robot not found on network")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot")
 				);
+			
+			// I considered adding an internal error code for "Rebooting" as it appears that sometimes the robot can reboot
+			// itself, but such status would only last for a few seconds before flipping to DisconnectedFromRobot so I
+			// ultimately decided against it. This is how an internal reboot manifests itself:
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.command: "start" -> "reset"
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.time: "1652085919" -> "1652124012"
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.initiator: "localApp" -> "admin"
 
 			int newDeviceRef = HomeSeerSystem.CreateDevice(factory.PrepareForHs());
 			WriteLog(ELogType.Info, $"Created new device {newDeviceRef} for {verifier.DetectedType} robot {verifier.Name} ({blid})");
