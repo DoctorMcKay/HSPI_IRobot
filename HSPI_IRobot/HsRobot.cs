@@ -54,6 +54,7 @@ namespace HSPI_IRobot {
 			
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
+			Robot = null;
 			Robot robot;
 			if (Type == RobotType.Vacuum) {
 				robot = new RobotVacuum(connectIp, Blid, Password);
