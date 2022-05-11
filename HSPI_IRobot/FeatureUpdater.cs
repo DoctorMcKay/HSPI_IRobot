@@ -72,7 +72,7 @@ namespace HSPI_IRobot {
 						"/images/HomeSeer/status/alarm.png",
 						17,
 						20
-					) { Label = "Not Ready "});
+					) { Label = "Not Ready"});
 					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
 						"/images/HomeSeer/status/alarm.png",
 						21,
@@ -82,7 +82,7 @@ namespace HSPI_IRobot {
 						"/images/HomeSeer/status/alarm.png",
 						22,
 						30
-					) { Label = "Not Ready "});
+					) { Label = "Not Ready"});
 
 					UpdateFeatureVersionNumber(feature.Ref, 3);
 					break;
