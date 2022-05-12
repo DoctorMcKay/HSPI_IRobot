@@ -61,6 +61,11 @@ namespace IRobotLANClient {
 								if (blid == null) {
 									blid = hostname.Split('-')[1];
 								}
+
+								if (DiscoveredRobots.Exists(r => r.Blid == blid)) {
+									// We already discovered this robot
+									continue;
+								}
 								
 								DiscoveredRobot robotMetadata = new DiscoveredRobot {
 									Version = versionNumber,
