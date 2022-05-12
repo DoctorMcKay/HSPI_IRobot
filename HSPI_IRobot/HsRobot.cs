@@ -177,6 +177,7 @@ namespace HSPI_IRobot {
 					Robot = srcRobot;
 				} else {
 					_robotTypeFailedValidation = true;
+					srcRobot.Disconnect().ContinueWith(_ => { });
 					return;
 				}
 			}
