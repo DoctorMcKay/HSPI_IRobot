@@ -35,6 +35,7 @@ namespace HSPI_IRobot {
 			PageFactory settingsPageFactory = PageFactory
 				.CreateSettingsPage("iRobotSettings", "iRobot Settings")
 				.WithLabel("plugin_status", "Status (refresh to update)", "x")
+				.WithLabel("robots_link", "Robots", "<a href=\"/iRobot/robots.html\">Manage Robots</a>")
 				.WithGroup("debug_group", "<hr>", new AbstractView[] {
 					new LabelView("debug_support_link", "Documentation", "<a href=\"https://github.com/DoctorMcKay/HSPI_iRobot/blob/master/README.md\" target=\"_blank\">GitHub</a>"), 
 					new LabelView("debug_donate_link", "Fund Future Development", "This plugin is and always will be free.<br /><a href=\"https://github.com/sponsors/DoctorMcKay\" target=\"_blank\">Please consider donating to fund future development.</a>"),
