@@ -140,6 +140,11 @@ namespace HSPI_IRobot {
 			return null;
 		}
 
+		public async void Disconnect() {
+			Robot.OnDisconnected -= HandleDisconnect;
+			await Robot.Disconnect();
+		}
+
 		private void EnqueueReconnectAttempt() {
 			_reconnectTimer?.Stop();
 			_reconnectTimer = new Timer {

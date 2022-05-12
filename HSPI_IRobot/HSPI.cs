@@ -368,6 +368,7 @@ namespace HSPI_IRobot {
 			
 			// Shared variables between multiple cases
 			string blid;
+			HsRobot robot;
 
 			switch (cmd) {
 				case "autodiscover":
@@ -426,7 +427,7 @@ namespace HSPI_IRobot {
 						return badCmdResponse;
 					}
 
-					HsRobot robot = _hsRobots.Find(bot => bot.Blid == blid);
+					robot = _hsRobots.Find(bot => bot.Blid == blid);
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
 						: JsonConvert.SerializeObject(new { status = robot.Robot.GetFullStatus() });
@@ -456,6 +457,21 @@ namespace HSPI_IRobot {
 					return JsonConvert.SerializeObject(new {
 						robots = _robotCloudAuth.Robots
 					});
+				
+				case "deleteRobot":
+					blid = (string) payload.SelectToken("blid");
+
+					robot = _hsRobots.Find(r => r.Blid == blid);
+					if (robot == null) {
+						return badCmdResponse;
+					}
+					
+					robot.Disconnect();
+					_hsRobots.Remove(robot);
+
+					HsDevice device = HomeSeerSystem.GetDeviceByAddress(blid);
+					HomeSeerSystem.DeleteDevice(device.Ref);
+					return successResponse;
 
 				default:
 					return badCmdResponse;
