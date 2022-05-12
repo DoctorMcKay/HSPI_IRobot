@@ -23,6 +23,7 @@ namespace HSPI_IRobot {
 
 		private List<HsRobot> _hsRobots;
 		private RobotDiscovery _robotDiscovery;
+		private RobotCloudAuth _robotCloudAuth;
 		private string _addRobotResult;
 
 		protected override void Initialize() {
@@ -429,6 +430,32 @@ namespace HSPI_IRobot {
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
 						: JsonConvert.SerializeObject(new { status = robot.Robot.GetFullStatus() });
+				
+				case "cloudLogin":
+					string cloudUsername = (string) payload.SelectToken("username");
+					string cloudPassword = (string) payload.SelectToken("password");
+					if (cloudUsername == null || cloudPassword == null) {
+						return badCmdResponse;
+					}
+
+					_robotCloudAuth = new RobotCloudAuth(cloudUsername, cloudPassword);
+					_robotCloudAuth.Login();
+					return successResponse;
+				
+				case "cloudLoginResult":
+					if (_robotCloudAuth == null || _robotCloudAuth.LoginInProcess) {
+						return badCmdResponse;
+					}
+
+					if (_robotCloudAuth.LoginError != null) {
+						return JsonConvert.SerializeObject(new {
+							error = _robotCloudAuth.LoginError.Message
+						});
+					}
+
+					return JsonConvert.SerializeObject(new {
+						robots = _robotCloudAuth.Robots
+					});
 
 				default:
 					return badCmdResponse;
