@@ -37,6 +37,8 @@ namespace IRobotLANClient {
 		protected readonly string Blid;
 		protected readonly string Password;
 
+		protected string MqttStatusTopic => $"$aws/things/{Blid}/shadow/update";
+
 		protected JObject ReportedState = new JObject();
 		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
@@ -78,6 +80,9 @@ namespace IRobotLANClient {
 			#endif
 
 			MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
+			// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
+			// but let's subscribe anyway just to be a good citizen
+			await MqttClient.SubscribeAsync(MqttStatusTopic);
 			ReportedState = new JObject(); // Reset reported state
 
 			return result;
@@ -180,7 +185,7 @@ namespace IRobotLANClient {
 			string jsonPayload = System.Text.Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
-			bool isStatusUpdate = msg.Topic == $"$aws/things/{Blid}/shadow/update";
+			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
 
 			#if DEBUG
 				if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
