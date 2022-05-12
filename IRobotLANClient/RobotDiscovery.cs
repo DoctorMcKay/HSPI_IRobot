@@ -40,11 +40,22 @@ namespace IRobotLANClient {
 								byte[] receiveBuffer = client.Receive(ref from);
 								JObject payload = JObject.Parse(Encoding.UTF8.GetString(receiveBuffer));
 								int.TryParse((string) payload.SelectToken("ver"), out int versionNumber);
+
+								string blid = (string) payload.SelectToken("robotid");
+								string hostname = (string) payload.SelectToken("hostname");
+								if (blid == null && hostname == null) {
+									continue; // malformed, apparently
+								}
+								
+								if (blid == null) {
+									blid = hostname.Split('-')[1];
+								}
+								
 								DiscoveredRobot robotMetadata = new DiscoveredRobot {
 									Version = versionNumber,
-									Hostname = (string) payload.SelectToken("hostname"),
+									Hostname = hostname,
 									RobotName = (string) payload.SelectToken("robotname"),
-									Blid = (string) payload.SelectToken("robotid"),
+									Blid = blid,
 									IpAddress = (string) payload.SelectToken("ip"),
 									MacAddress = (string) payload.SelectToken("mac"),
 									SoftwareVersion = (string) payload.SelectToken("sw"),
