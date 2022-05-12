@@ -343,7 +343,10 @@ namespace HSPI_IRobot {
 			WriteLog(ELogType.Trace, $"PostBackProc page name {page} by user {user} with rights {userRights}");
 			
 			if ((userRights & 2) != 2) {
-				return JsonConvert.SerializeObject(new { error = "You do not have administrative privileges." });
+				return JsonConvert.SerializeObject(new {
+					error = "Access Denied",
+					fatal = true
+				});
 			}
 			
 			switch (page) {
@@ -440,7 +443,7 @@ namespace HSPI_IRobot {
 						return badCmdResponse;
 					}
 
-					_robotCloudAuth = new RobotCloudAuth(cloudUsername, cloudPassword);
+					_robotCloudAuth = new RobotCloudAuth(this, cloudUsername, cloudPassword);
 					_robotCloudAuth.Login();
 					return successResponse;
 				

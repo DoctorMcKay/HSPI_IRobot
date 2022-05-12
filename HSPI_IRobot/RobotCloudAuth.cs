@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
+using HomeSeer.PluginSdk.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -10,13 +11,15 @@ namespace HSPI_IRobot {
 		public bool LoginInProcess { get; private set; }
 		public List<RobotDetails> Robots { get; private set; }
 		public Exception LoginError { get; private set; }
-		
-		protected readonly string Username;
-		protected readonly string Password;
 
-		public RobotCloudAuth(string username, string password, string apiKey = null) {
-			Username = username;
-			Password = password;
+		private readonly HSPI _plugin;
+		private readonly string _username;
+		private readonly string _password;
+
+		public RobotCloudAuth(HSPI plugin, string username, string password) {
+			_plugin = plugin;
+			_username = username;
+			_password = password;
 
 			LoginInProcess = false;
 		}
@@ -33,15 +36,15 @@ namespace HSPI_IRobot {
 					string irobotDomain = (string) endpoints.SelectToken("deployments.v011.httpBase");
 					string gigyaApiKey = (string) endpoints.SelectToken("gigya.api_key");
 					string gigyaDomain = (string) endpoints.SelectToken("gigya.datacenter_domain");
-					DebugLog($"Using Gigya domain {gigyaDomain} and API key {gigyaApiKey}");
+					_plugin.WriteLog(ELogType.Debug, $"Using Gigya domain {gigyaDomain} and API key {gigyaApiKey}");
 
 					// Gigya login
 					Dictionary<string, string> postFields = new Dictionary<string, string> {
 						{ "apiKey", gigyaApiKey },
 						{ "format", "json" },
-						{ "loginID", Username },
+						{ "loginID", _username },
 						{ "loginMode", "standard" },
-						{ "password", Password },
+						{ "password", _password },
 						{ "targetEnv", "mobile" }
 					};
 
@@ -56,7 +59,7 @@ namespace HSPI_IRobot {
 						gigyaUid = (string) gigyaLoginResponse.SelectToken("UID");
 						gigyaUidSignature = (string) gigyaLoginResponse.SelectToken("UIDSignature");
 						gigyaSignatureTimestamp = (string) gigyaLoginResponse.SelectToken("signatureTimestamp");
-						DebugLog($"Gigya login success with uid {gigyaUid}");
+						_plugin.WriteLog(ELogType.Debug, $"Gigya login success with uid {gigyaUid}");
 					}
 
 					string irobotLoginBody = JsonConvert.SerializeObject(new {
@@ -88,22 +91,16 @@ namespace HSPI_IRobot {
 						foreach (JProperty prop in robots.Properties()) {
 							RobotDetails details = new RobotDetails(prop.Name, prop.Value);
 							Robots.Add(details);
-							DebugLog($"Found robot {details.Blid} / {details.Password}");
+							_plugin.WriteLog(ELogType.Info, $"Found robot {details.Name} with BLID {details.Blid} and password {details.Password}");
 						}
 					}
 				}
 			} catch (Exception ex) {
 				LoginError = ex;
-				DebugLog(ex.ToString());
+				_plugin.WriteLog(ELogType.Error, ex.ToString());
 			} finally {
 				LoginInProcess = false;
 			}
-		}
-
-		private void DebugLog(string content) {
-			#if DEBUG
-				Console.WriteLine($"[RobotCloudAuth] {content}");
-			#endif
 		}
 
 		public class RobotDetails {

@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-using IRobotLANClient.Enums;
-using Newtonsoft.Json.Linq;
+﻿using IRobotLANClient.Enums;
 
 namespace IRobotLANClient {
 	public class RobotVacuum : Robot {
