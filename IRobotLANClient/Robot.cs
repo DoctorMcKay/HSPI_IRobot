@@ -42,7 +42,9 @@ namespace IRobotLANClient {
 		protected JObject ReportedState = new JObject();
 		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
-		private Timer _pingTimer = null;
+		private bool _awaitingFirstReport;
+		private Timer _startupTimer;
+		private Timer _pingTimer;
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -78,6 +80,8 @@ namespace IRobotLANClient {
 			#if DEBUG
 				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
 			#endif
+			
+			_awaitingFirstReport = true;
 
 			MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
 			// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
@@ -181,22 +185,22 @@ namespace IRobotLANClient {
 
 		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
 			EnqueuePing();
-			
-			string jsonPayload = System.Text.Encoding.UTF8.GetString(msg.Payload);
+
+			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
 			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
 
-			#if DEBUG
-				if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
-					Console.WriteLine($"Received message with topic {msg.Topic}");
-				}
-			#endif
+#if DEBUG
+			if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
+				Console.WriteLine($"Received message with topic {msg.Topic}");
+			}
+#endif
 
 			if (!isStatusUpdate) {
 				return;
 			}
-			
+
 			// This is a robot status update
 
 			JObject stateUpdate = (JObject) payload.SelectToken("state.reported");
@@ -204,10 +208,10 @@ namespace IRobotLANClient {
 				// This shouldn't ordinarily happen, but in case it does...
 				return;
 			}
-			
+
 			// First let's find the differences between the two objects for debugging purposes
 			JObject previousReportedState = JObject.Parse(ReportedState.ToString());
-				
+
 			foreach (JProperty prop in stateUpdate.Properties()) {
 				ReportedState[prop.Name] = prop.Value;
 			}
@@ -215,32 +219,57 @@ namespace IRobotLANClient {
 			foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
 				DebugOutput(change);
 			}
+			
+			// Some robots don't send their entire state all at once upon connecting, which can cause problems since
+			// a lot of our code expects the entire state to be there once we receive a report. So let's wait 1 second
+			// after receiving the first report for additional reports to come in.
 
-			Name = (string) ReportedState.SelectToken("name");
-			Sku = (string) ReportedState.SelectToken("sku");
-			BatteryLevel = (byte) ReportedState.SelectToken("batPct");
+			if (_awaitingFirstReport) {
+				_awaitingFirstReport = false;
+				
+				_startupTimer = new Timer {
+					AutoReset = false,
+					Enabled = true,
+					Interval = 1000
+				};
+
+				_startupTimer.Elapsed += (sender, args) => {
+					_startupTimer = null;
+					ProcessStateUpdate();
+				};
+			}
+
+			if (_startupTimer == null) {
+				ProcessStateUpdate();
+			}
+		}
+		
+		private void ProcessStateUpdate() {
+			Name = (string) (ReportedState.SelectToken("name") ?? "");
+			Sku = (string) (ReportedState.SelectToken("sku") ?? "");
+			BatteryLevel = (byte) (ReportedState.SelectToken("batPct") ?? 0);
 			ChildLock = (bool) (ReportedState.SelectToken("childLock") ?? JToken.FromObject(false));
 				
 #if DEBUG
 			/*
-					 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
-					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
-					 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
-					 */
+			 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
+			 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
+			 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
+			 */
 			Console.WriteLine(string.Format(
 				"Battery: {0}%, Cycle: {1}, Phase: {2}, Error: {3}, NotReady: {4}, OperatingMode: {5}, Initiator: {6}",
 				BatteryLevel,
-				(string) ReportedState.SelectToken("cleanMissionStatus.cycle"),
-				(string) ReportedState.SelectToken("cleanMissionStatus.phase"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.error"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.notReady"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.operatingMode"),
-				(string) ReportedState.SelectToken("cleanMissionStatus.initiator")
+				(string) (ReportedState.SelectToken("cleanMissionStatus.cycle") ?? ""),
+				(string) (ReportedState.SelectToken("cleanMissionStatus.phase") ?? ""),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.operatingMode") ?? 0),
+				(string) (ReportedState.SelectToken("cleanMissionStatus.initiator") ?? 0)
 			));
 #endif
 
-			string missionCycle = (string) ReportedState.SelectToken("cleanMissionStatus.cycle");
-			string missionPhase = (string) ReportedState.SelectToken("cleanMissionStatus.phase");
+			string missionCycle = (string) (ReportedState.SelectToken("cleanMissionStatus.cycle") ?? "none");
+			string missionPhase = (string) (ReportedState.SelectToken("cleanMissionStatus.phase") ?? "stop");
 
 			switch (missionCycle) {
 				case "none":
@@ -316,9 +345,9 @@ namespace IRobotLANClient {
 					break;
 			}
 				
-			ErrorCode = (int) ReportedState.SelectToken("cleanMissionStatus.error");
-			NotReadyCode = (int) ReportedState.SelectToken("cleanMissionStatus.notReady");
-			CanLearnMaps = (bool) ReportedState.SelectToken("pmapLearningAllowed");
+			ErrorCode = (int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0);
+			NotReadyCode = (int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0);
+			CanLearnMaps = (bool) (ReportedState.SelectToken("pmapLearningAllowed") ?? false);
 			
 			HandleRobotStateUpdate();
 			

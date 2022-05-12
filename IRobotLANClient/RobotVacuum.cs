@@ -13,8 +13,8 @@ namespace IRobotLANClient {
 		}
 
 		protected override void HandleRobotStateUpdate() {
-			bool binPresent = (bool) ReportedState.SelectToken("bin.present");
-			bool binFull = (bool) ReportedState.SelectToken("bin.full");
+			bool binPresent = (bool) (ReportedState.SelectToken("bin.present") ?? false);
+			bool binFull = (bool) (ReportedState.SelectToken("bin.full") ?? false);
 			if (!binPresent) {
 				BinStatus = BinStatus.NotPresent;
 			} else {

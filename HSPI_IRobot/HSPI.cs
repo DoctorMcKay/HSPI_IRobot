@@ -401,21 +401,21 @@ namespace HSPI_IRobot {
 							return successResponse;
 						
 						default:
-							return JsonConvert.SerializeObject(new { success = false, error = _addRobotResult });
+							return JsonConvert.SerializeObject(new { error = _addRobotResult });
 					}
 
 				case "getRobots":
-					JObject[] robots = new JObject[_hsRobots.Count];
+					object[] robots = new object[_hsRobots.Count];
 					for (int i = 0; i < _hsRobots.Count; i++) {
-						JObject robotData = new JObject();
-						robotData.Add("blid", JToken.FromObject(_hsRobots[i].Blid));
-						robotData.Add("password", JToken.FromObject(_hsRobots[i].Password));
-						robotData.Add("stateString", JToken.FromObject(_hsRobots[i].StateString));
-						robotData.Add("ip", JToken.FromObject(_hsRobots[i].ConnectedIp));
-						robotData.Add("type", JToken.FromObject(_hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop"));
-						robotData.Add("name", JToken.FromObject(_hsRobots[i].Robot?.Name ?? "Unknown"));
-						robotData.Add("sku", JToken.FromObject(_hsRobots[i].Robot?.Sku ?? "unknown"));
-						robots[i] = robotData;
+						robots[i] = new {
+							blid = _hsRobots[i].Blid,
+							password = _hsRobots[i].Password,
+							stateString = _hsRobots[i].StateString,
+							ip = _hsRobots[i].ConnectedIp,
+							type = _hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
+							name = _hsRobots[i].Robot?.Name ?? "Unknown",
+							sku = _hsRobots[i].Robot?.Sku ?? "unknown"
+						};
 					}
 					
 					return JsonConvert.SerializeObject(new { robots });
@@ -474,6 +474,8 @@ namespace HSPI_IRobot {
 					await verifier.Disconnect();
 					
 					if (verifier.DetectedType == RobotType.Unrecognized) {
+						WriteLog(ELogType.Debug, "Unrecognized robot type");
+						WriteLog(ELogType.Debug, verifier.GetFullStatus().ToString());
 						_addRobotResult = "Unrecognized robot type";
 						return;
 					}
