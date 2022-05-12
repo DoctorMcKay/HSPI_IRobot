@@ -9,6 +9,38 @@
 		<!--This liquid tag loads all of the necessary css files for HomeSeer-->
 		{{includefile '/bootstrap/css/page_common.css'}}
 		<title>iRobot - Manage Robots</title>
+		
+		<style>
+			.irobot-table-header>div {
+				font-weight: 900;
+			}
+			
+			.irobot-table-body .btn-link {
+				padding: 0;
+				margin-right: 5px;
+			}
+			
+			#btn-cloudlogin {
+				position: absolute;
+				bottom: 0;
+			}
+			
+			#robotInfoModal .modal-body dd {
+				font-family: monospace;
+			}
+			
+			#robot-full-status {
+				font-family: monospace;
+				font-size: 12px;
+				width: 100%;
+				height: 300px;
+			}
+			
+			.add-robot-help {
+				padding: 5px;
+				border-radius: 5px;
+			}
+		</style>
 	</head>
 	<body class="body homeseer-skin">
 	<!--These liquid tags add the HomeSeer header and navbar to the top of the page when appropriate-->
@@ -17,11 +49,533 @@
 	<!--Primary container for the page content
 		The .container class ensures the page content is fit and centered to the screen-->
 		<div class="container">
-			Hello world
+			<div class="streakhs grey lighten-2">Robots</div>
+			
+			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header robots-table-header d-none d-sm-flex">
+				<div class="col-3">Name</div>
+				<div class="col-3">Address</div>
+				<div class="col-3">Status</div>
+				<div class="col-3">Actions</div>
+			</div>
+			
+			<div id="robots-table-body" class="irobot-table-body"></div>
+			
+			<!-- Auto discovery -->
+			<div class="streakhs grey lighten-2">Other Robots on Network</div>
+			
+			<div id="discovered-robots-table-outer" style="display: none">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header discovered-robots-table-header d-none d-sm-flex">
+					<div class="col-3">Name</div>
+					<div class="col-3">Address</div>
+					<div class="col-3">Model</div>
+					<div class="col-3">Actions</div>
+				</div>
+				
+				<div id="discovered-robots-table-body" class="irobot-table-body"></div>
+			</div>
+			
+			<button id="btn-autodiscover" type="button" class="btn btn-cancel">Discover Robots</button>
+			<button id="btn-manualadd" type="button" class="btn btn-cancel">Add Robot Manually</button>
+			
+			<!-- Cloud add -->
+			<div class="streakhs grey lighten-2">Cloud Add</div>
+			
+			<div class="row">
+				<div class="col-5">
+					<div class="md-form">
+						<input type="email" id="cloud-email" class="form-control">
+						<label for="cloud-email">iRobot Account Email</label>
+					</div>
+				</div>
+				
+				<div class="col-5">
+					<div class="md-form">
+						<input type="password" id="cloud-password" class="form-control">
+						<label for="cloud-password">iRobot Account Password</label>
+					</div>
+				</div>
+				
+				<div class="col-2">
+					<button id="btn-cloudlogin" type="button" class="btn btn-cancel">Login</button>
+				</div>
+			</div>
+			
+			<p id="cloud-login-error" class="hs-bg-red-4 p-1" style="display: none"></p>
+			
+			<div id="cloud-robots-table-outer" style="display: none">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header cloud-robots-table-header d-none d-sm-flex">
+					<div class="col-3">Name</div>
+					<div class="col-3">Address</div>
+					<div class="col-3">Model</div>
+					<div class="col-3">Actions</div>
+				</div>
+				
+				<div id="cloud-robots-table-body" class="irobot-table-body"></div>
+			</div>
 		</div>
+		
+		<!-- Robot info modal -->
+		<div class="modal fade" id="robotInfoModal" tabindex="-1" role="dialog" aria-hidden="true">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title"></h4>
+					</div>
+					
+					<div class="modal-body">
+						<dl>
+							<dt>Address</dt>
+							<dd id="robot-modal-address"></dd>
+							
+							<dt>BLID</dt>
+							<dd id="robot-modal-blid"></dd>
+							
+							<dt>Password</dt>
+							<dd id="robot-modal-password"></dd>
+							
+							<dt>SKU</dt>
+							<dd id="robot-modal-sku"></dd>
+							
+							<dt>Robot Type</dt>
+							<dd id="robot-modal-type"></dd>
+						</dl>
+						
+						<textarea id="robot-full-status" readonly style="display: none"></textarea>
+					</div>
+					
+					<div class="modal-footer">
+						<button id="btn-fullstatus" type="button" class="btn btn-default-clear">Dump Full Status Data</button>
+						<button type="button" class="btn btn-cancel" data-dismiss="modal">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		
+		<!-- Add robot modal -->
+		<div class="modal fade" id="manualAddRobotModal" tabindex="-1" role="dialog" aria-hidden="true">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">Add Robot</h4>
+					</div>
+					
+					<div class="modal-body">
+						<p class="add-robot-help hs-bg-blue-l4">
+							If you don't know your robot's password (it's different from your iRobot account password), you can use the Cloud Add tool
+							with your iRobot account credentials instead of adding the robot manually. The Cloud Add tool connects to the iRobot cloud
+							to retrieve your robots' passwords, then connects directly over the local network. Internet access is not required after
+							initial setup with Cloud Add.
+						</p>
+						
+						<div class="md-form">
+							<input type="text" id="add-robot-ip" class="form-control" />
+							<label for="add-robot-ip" id="add-robot-ip-label" class="autofill-label">IP Address</label>
+						</div>
+						
+						<div class="md-form">
+							<input type="text" id="add-robot-blid" class="form-control" />
+							<label for="add-robot-blid" class="autofill-label">Robot BLID</label>
+						</div>
+						
+						<div class="md-form">
+							<input type="text" id="add-robot-password" class="form-control" />
+							<label for="add-robot-password" id="add-robot-password-label">Robot Password</label>
+						</div>
+					</div>
+					
+					<p id="add-robot-error" class="hs-bg-red-4 p-1" style="display: none"></i>
+					
+					<div class="modal-footer">
+						<button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
+						<button id="btn-addrobot" type="button" class="btn btn-success">Add</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		
 		{{includefile 'bootstrap/js/page_common.js'}}
 		<script>
-		
+			function fatalPageError(message) {
+				let $div = $('<div class="card mt-2" />');
+				$('.container').html($div);
+				
+				let $div2 = $('<div class="row" />');
+				$div.html($div2);
+				
+				$div = $div2;
+				$div2 = $('<div class="col text-center" />');
+				$div2.text(message);
+				$div.html($div2);
+			}
+			
+			if (!window.Promise) {
+				fatalPageError('Your browser is too old to use this page. Please use a modern browser.');
+			}
+		</script>
+		<script>
+			(async function() {
+				let g_AutoDiscoveryInterval = null;
+				let g_ActiveRobots = [];
+				
+				$('#btn-autodiscover').click(autoDiscover);
+				$('#btn-cloudlogin').click(cloudLogin);
+				$('#btn-addrobot').click(addRobot);
+				$('#btn-manualadd').click(function() {
+					$('.add-robot-help').show();
+					$('#add-robot-error').hide();
+					$('#manualAddRobotModal input').val('');
+					$('#manualAddRobotModal label').removeClass('active');
+					$('#manualAddRobotModal').modal();
+				});
+				$('#btn-fullstatus').click(async function() {
+					let {status} = await ajaxCmd('getRobotFullStatus', {blid: $('#robot-modal-blid').text()});
+					$('#robot-full-status').val(JSON.stringify(status, undefined, '\t')).show();
+				});
+				
+				// The page has just loaded. Get our robot list.
+				printRobotTable();
+				setInterval(printRobotTable, 5000);
+				
+				async function printRobotTable() {
+					let {robots} = await ajaxCmd('getRobots');
+					g_ActiveRobots = robots;
+					
+					let $tableBody = $('#robots-table-body');
+					$tableBody.html('');
+					
+					robots.forEach((robot, idx) => {
+						if (idx > 0) {
+							$tableBody.append('<hr class="d-sm-none" />');
+						}					
+					
+						let $row = $('<div class="row no-gutters" />');
+						
+						let $col = $('<div class="col-sm-3" />');
+						$col.text(robot.name);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						$col.text(robot.ip);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						$col.text(robot.stateString);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						let $btn = $('<button type="button" class="btn btn-link" />');
+						$btn.click(() => {
+							$('#robot-full-status').hide();
+							
+							$('#robotInfoModal .modal-title').text(robot.name);
+							$('#robot-modal-address').text(robot.ip);
+							$('#robot-modal-blid').text(robot.blid);
+							$('#robot-modal-password').text(robot.password);
+							$('#robot-modal-sku').text(robot.sku);
+							$('#robot-modal-type').text(robot.type[0].toUpperCase() + robot.type.substring(1));
+							$('#robotInfoModal').modal();
+						});
+						$btn.text('Info');
+						$col.append($btn);
+						
+						$btn = $('<button type="button" class="btn btn-link" />');
+						$btn.click(async () => {
+							let confirmed = confirm(`Are you sure you want to delete "${robot.name}"? All HS devices associated with this robot will be deleted and cannot be recovered.`);
+							if (!confirmed) {
+								return;
+							}
+							
+							await ajaxCmd('deleteRobot', {blid: robot.blid});
+							printRobotTable();
+						});
+						$btn.text('Delete');
+						$col.append($btn);
+						
+						$row.append($col);
+						
+						$tableBody.append($row);
+					});
+				}
+				
+				async function autoDiscover() {
+					let $discoverBtn = $('#btn-autodiscover');
+					$discoverBtn.prop('disabled', true);
+					$discoverBtn.html('<i class="fas fa-spinner fa-spin"></i> Discover Robots');
+					
+					$('#discovered-robots-table-outer').show();
+					let $tableBody = $('#discovered-robots-table-body');
+					$tableBody.html('');
+					
+					let idx = 0;
+					
+					await doAutoDiscover((robot) => {
+						if (idx++ > 0) {
+							$tableBody.append('<hr class="d-sm-none" />');
+						}
+						
+						let $row = $('<div class="row no-gutters" />');
+						
+						let $col = $('<div class="col-sm-3" />');
+						$col.text(robot.RobotName);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						$col.text(robot.IpAddress);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						$col.text(robot.Sku);
+						$row.append($col);
+						
+						$col = $('<div class="col-sm-3" />');
+						let $btn = $('<button type="button" class="btn btn-link" />');
+						if (g_ActiveRobots.some(r => r.blid == robot.Blid)) {
+							$btn.prop('disabled', true);
+							$btn.text('Already Added');
+						} else {
+							$btn.click(() => {
+								$('.add-robot-help').show();
+								$('#add-robot-error').hide();
+								
+								$('#add-robot-ip').val(robot.IpAddress);
+								$('#add-robot-blid').val(robot.Blid);
+								$('#add-robot-password').val('');
+								
+								$('#manualAddRobotModal label').removeClass('active');
+								$('#manualAddRobotModal .autofill-label').addClass('active');
+								
+								$('#manualAddRobotModal').modal();
+							});
+							$btn.text('Add');
+						}
+						$col.append($btn);
+						$row.append($col);
+						
+						$tableBody.append($row);
+					});
+					
+					$discoverBtn.text('Discover Robots');
+					$discoverBtn.prop('disabled', false);
+				}
+				
+				async function cloudLogin() {
+					let username = $('#cloud-email').val();
+					let password = $('#cloud-password').val();
+					if (!username || !password) {
+						return;
+					}
+					
+					let $loginBtn = $('#btn-cloudlogin');
+					$loginBtn.prop('disabled', true);
+					$loginBtn.html('<i class="fas fa-spinner fa-spin"></i> Login');
+					$('#cloud-login-error').hide();
+					
+					await ajaxCmd('cloudLogin', {username, password});
+					let startTime = Date.now();
+					
+					setTimeout(async function checkCloud() {
+						let result = await ajaxCmd('cloudLoginResult');
+						
+						if (result.error == 'Invalid cmd') {
+							// Login still in process
+							
+							if (Date.now() - startTime > 5000) {
+								complete('Login request timed out');
+							} else {
+								setTimeout(checkCloud, 500);
+							}
+							
+							return;
+						}
+						
+						// We have a result
+						if (result.error) {
+							complete(result.error);
+							return;
+						}
+						
+						// We've got robots
+						$('#cloud-robots-table-outer').show();
+						let $tableBody = $('#cloud-robots-table-body');
+						$tableBody.html('');
+						
+						let robotAddressCells = {};
+						
+						result.robots.forEach((robot, idx) => {
+							if (idx > 0) {
+								$tableBody.append('<hr class="d-sm-none" />');
+							}
+							
+							let $row = $('<div class="row no-gutters" />');
+							
+							let $col = $('<div class="col-sm-3" />');
+							$col.text(robot.Name);
+							$row.append($col);
+							
+							$col = $('<div class="col-sm-3" />');
+							$col.html('<i class="fas fa-spinner fa-spin"></i> Searching...');
+							robotAddressCells[robot.Blid] = $col;
+							$row.append($col);
+							
+							$col = $('<div class="col-sm-3" />');
+							$col.text(robot.Sku);
+							$row.append($col);
+							
+							$col = $('<div class="col-sm-3" />');
+							let $btn = $('<button type="button" class="btn btn-link" />');
+							if (g_ActiveRobots.some(r => r.blid == robot.Blid)) {
+								$btn.prop('disabled', true);
+								$btn.text('Already Added');
+							} else {
+								$btn.click(() => {
+									$('.add-robot-help').hide();
+									$('#add-robot-error').hide();
+									
+									$('#add-robot-ip').val(robotAddressCells[robot.Blid].data('ip') || '');
+									$('#add-robot-blid').val(robot.Blid);
+									$('#add-robot-password').val(robot.Password);
+									
+									$('#manualAddRobotModal .autofill-label, #add-robot-password-label').addClass('active');
+									if (!robotAddressCells[robot.Blid].data('ip')) {
+										// If we don't have our IP yet, remove the active class from the label
+										$('#add-robot-ip-label').removeClass('active');
+									}
+									
+									$('#manualAddRobotModal').modal();
+								});
+								$btn.text('Add');
+							}
+							
+							$col.append($btn);
+							$row.append($col);
+							
+							$tableBody.append($row);
+						});
+						
+						complete();
+						
+						await doAutoDiscover((robot) => {
+							robotAddressCells[robot.Blid].text(robot.IpAddress).data('ip', robot.IpAddress);
+						});
+						
+						for (let i in robotAddressCells) {
+							let $cell = robotAddressCells[i];
+							if (!$cell.data('ip')) {
+								$cell.text('Not found on network');
+							}
+						}
+					}, 500);
+					
+					function complete(error) {
+						$('#cloud-login-error').text(error || '')[error ? 'show' : 'hide']();
+						$loginBtn.prop('disabled', false);
+						$loginBtn.text('Login');
+					}
+				}
+				
+				async function addRobot() {
+					let ip = $('#add-robot-ip').val();
+					let blid = $('#add-robot-blid').val();
+					let password = $('#add-robot-password').val();
+					
+					if (!ip || !blid || !password) {
+						return;
+					}
+					
+					let $addBtn = $('#btn-addrobot');
+					$addBtn.prop('disabled', true);
+					$addBtn.html('<i class="fas fa-spinner fa-spin"></i> Add');
+					
+					let {error} = await ajaxCmd('addRobot', {ip, blid, password});
+					if (error) {
+						$addBtn.prop('disabled', false);
+						$addBtn.text('Add');
+						$('#add-robot-error').text(error).show();
+						return;
+					}
+					
+					setTimeout(async function addRobotCheck() {
+						let result = await ajaxCmd('addRobotResult');
+						if (result.success) {
+							// We did it!
+							setTimeout(() => {
+								$addBtn.prop('disabled', false);
+								$addBtn.text('Add');
+								$('#manualAddRobotModal').modal('hide');
+								printRobotTable();
+							}, 1000);
+							return;
+						}
+						
+						if (result.error == 'Invalid cmd') {
+							// Still processing
+							setTimeout(addRobotCheck, 500);
+							return;
+						}
+						
+						$('#add-robot-error').text(result.error).show();
+						$addBtn.prop('disabled', false);
+						$addBtn.text('Add');
+					}, 500);
+				}
+				
+				function doAutoDiscover(callback) {
+					clearTimeout(g_AutoDiscoveryInterval);
+					
+					return new Promise(async (resolve) => {
+						await ajaxCmd('autodiscover');
+						let startTime = Date.now();
+						let seenRobots = {};
+						let robots = [];
+						
+						g_AutoDiscoveryInterval = setTimeout(async function discovery() {
+							let {discoveredRobots} = await ajaxCmd('autodiscoverResult');
+							discoveredRobots.filter(r => !seenRobots[r.Blid]).forEach((robot) => {
+								seenRobots[robot.Blid] = true;
+								robots.push(robot);
+								callback(robot);
+							});
+							
+							if (Date.now() - startTime < 5000) {
+								setTimeout(discovery, 500);
+							} else {
+								// Discovery is done
+								resolve(robots);
+							}
+						});
+					});
+				}
+				
+				function ajaxCmd(cmd, body) {
+					body = body || {};
+					body.cmd = cmd;
+					
+					return new Promise((resolve, reject) => {
+						let xhr = new XMLHttpRequest();
+						xhr.open('POST', '/iRobot/robots.html');
+						xhr.setRequestHeader('Content-Type', 'application/json');
+						xhr.send(JSON.stringify(body));
+						
+						xhr.addEventListener('readystatechange', function() {
+							if (xhr.readyState != XMLHttpRequest.DONE) {
+								return;
+							}
+							
+							if (xhr.status != 200) {
+								return reject(new Error('HTTP error ' + xhr.status));
+							}
+							
+							let response = JSON.parse(xhr.responseText);
+							if (response.error && response.fatal) {
+								fatalPageError(response.error);
+								return;
+							}
+							
+							resolve(response);
+						});
+					});
+				}
+			})();
 		</script>
 	</body>
 </html>
