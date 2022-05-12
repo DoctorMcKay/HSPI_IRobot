@@ -33,6 +33,17 @@ namespace IRobotLANClient {
 					client.Client.ReceiveTimeout = 5000;
 					client.Client.Bind(new IPEndPoint(address.Address, 0));
 
+					bool disposed = false;
+					
+					byte[] request = Encoding.UTF8.GetBytes("irobotmcs");
+					DateTime startTime = DateTime.Now;
+					Task.Run(async () => {
+						while (!disposed && DateTime.Now.Subtract(startTime).TotalSeconds <= 4) {
+							client.Send(request, request.Length, new IPEndPoint(broadcastAddress, 5678));
+							await Task.Delay(1000);
+						}
+					});
+
 					Task.Run(() => {
 						try {
 							while (true) {
@@ -67,12 +78,10 @@ namespace IRobotLANClient {
 							}
 						} catch (SocketException) {
 							// Receive probably timed out, so we can close the client now
+							disposed = true;
 							client.Dispose();
 						}
 					});
-
-					byte[] request = Encoding.UTF8.GetBytes("irobotmcs");
-					client.Send(request, request.Length, new IPEndPoint(broadcastAddress, 5678));
 				}
 			}
 		}
