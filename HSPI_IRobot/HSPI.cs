@@ -340,7 +340,7 @@ namespace HSPI_IRobot {
 		}
 
 		public override string PostBackProc(string page, string data, string user, int userRights) {
-			WriteLog(ELogType.Debug, $"PostBackProc page name {page} by user {user} with rights {userRights}");
+			WriteLog(ELogType.Trace, $"PostBackProc page name {page} by user {user} with rights {userRights}");
 			
 			if ((userRights & 2) != 2) {
 				return JsonConvert.SerializeObject(new { error = "You do not have administrative privileges." });
