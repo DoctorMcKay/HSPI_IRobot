@@ -45,8 +45,46 @@ namespace HSPI_IRobot {
 						69,
 						255
 					) { Label = "Not Ready" });
+					
+					// 2-3 migrations, eventually refactor this so all intermediate version upgrades are run in series
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						17,
+						20
+					) { Label = "Not Ready "});
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						21,
+						"Fill the tank"
+					));
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						22,
+						30
+					) { Label = "Not Ready "});
 
-					UpdateFeatureVersionNumber(feature.Ref, 2);
+					UpdateFeatureVersionNumber(feature.Ref, 3);
+					break;
+				
+				case 2:
+					_plugin.GetHsController().DeleteStatusGraphicByValue(feature.Ref, 17);
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						17,
+						20
+					) { Label = "Not Ready"});
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						21,
+						"Fill the tank"
+					));
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						22,
+						30
+					) { Label = "Not Ready"});
+
+					UpdateFeatureVersionNumber(feature.Ref, 3);
 					break;
 			}
 		}

@@ -11,7 +11,7 @@ using IRobotLANClient.Enums;
 namespace HSPI_IRobot {
 	public class HsRobot {
 		public HsRobotState State { get; private set; } = HsRobotState.Disconnected;
-		public HsRobotCannotConnectReason CannotConnectReason { get; private set; } = HsRobotCannotConnectReason.None;
+		public HsRobotCannotConnectReason CannotConnectReason { get; private set; } = HsRobotCannotConnectReason.Ok;
 		public string StateString { get; private set; } = "Connecting";
 		public string ConnectedIp { get; private set; }
 		public Robot Robot { get; private set; } = null;
@@ -47,13 +47,14 @@ namespace HSPI_IRobot {
 				return;
 			}
 			
-			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.None, "Connecting");
+			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.Ok, "Connecting");
 
 			string lastKnownIp = HsDevice.PlugExtraData["lastknownip"];
 			string connectIp = ip ?? lastKnownIp;
 			
-			_plugin.WriteLog(ELogType.Debug, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
+			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
+			Robot = null;
 			Robot robot;
 			if (Type == RobotType.Vacuum) {
 				robot = new RobotVacuum(connectIp, Blid, Password);
@@ -98,7 +99,7 @@ namespace HSPI_IRobot {
 				
 				if (Robot != null) {
 					// We passed validation
-					UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.None, "OK");
+					UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.Ok, "OK");
 					ConnectedIp = connectIp;
 					Robot.OnDisconnected += HandleDisconnect;
 					Robot.OnUnexpectedValue += HandleUnexpectedValue;
@@ -169,8 +170,6 @@ namespace HSPI_IRobot {
 				if (srcRobot.IsCorrectRobotType()) {
 					// All seems good!
 					Robot = srcRobot;
-					State = HsRobotState.Connected;
-					StateString = "OK";
 				} else {
 					_robotTypeFailedValidation = true;
 					return;
@@ -228,7 +227,7 @@ namespace HSPI_IRobot {
 			Robot.OnDisconnected -= HandleDisconnect;
 
 			_plugin.WriteLog(ELogType.Warning, $"Disconnected from robot {Robot.Name}");
-			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.None, "Disconnected");
+			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.Ok, "Disconnected");
 
 			await Task.Delay(1000);
 			await AttemptConnect();
@@ -260,7 +259,7 @@ namespace HSPI_IRobot {
 		}
 
 		public enum HsRobotCannotConnectReason {
-			None,
+			Ok,
 			CannotDiscover,
 			DiscoveredCannotConnect,
 			CannotValidateType

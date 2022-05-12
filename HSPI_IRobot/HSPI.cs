@@ -76,7 +76,7 @@ namespace HSPI_IRobot {
 
 			await robot.AttemptConnect();
 			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
-			WriteLog(ELogType.Info, $"Connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
+			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
 				PlugExtraData extraData = device.PlugExtraData;
@@ -134,7 +134,10 @@ namespace HSPI_IRobot {
 
 		private void HandleRobotConnectionStateUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
-			WriteLog(ELogType.Debug, $"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}");
+			WriteLog(
+				robot.State == HsRobot.HsRobotState.Connecting || robot.State == HsRobot.HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
+				$"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}"
+			);
 
 			HsFeature errorFeature = robot.GetFeature(FeatureType.Error);
 
@@ -569,7 +572,9 @@ namespace HSPI_IRobot {
 					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 8, 14, "Not Ready")
 					.AddGraphicForValue("/images/HomeSeer/status/batterytoolowtooperatelock.png", 15, "Low battery")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 16, "Empty the bin")
-					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 17, 30, "Not Ready")
+					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 17, 20, "Not Ready")
+					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 21, "Fill the tank")
+					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 22, 30, "Not Ready")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 31, "Fill the tank")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 32, "Close the lid")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 33, "Not Ready")
@@ -590,6 +595,13 @@ namespace HSPI_IRobot {
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotDiscoverRobot, "Robot not found on network")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot")
 				);
+			
+			// I considered adding an internal error code for "Rebooting" as it appears that sometimes the robot can reboot
+			// itself, but such status would only last for a few seconds before flipping to DisconnectedFromRobot so I
+			// ultimately decided against it. This is how an internal reboot manifests itself:
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.command: "start" -> "reset"
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.time: "1652085919" -> "1652124012"
+			// [AttemptConnect:66] [Upstairs i7] lastCommand.initiator: "localApp" -> "admin"
 
 			int newDeviceRef = HomeSeerSystem.CreateDevice(factory.PrepareForHs());
 			WriteLog(ELogType.Info, $"Created new device {newDeviceRef} for {verifier.DetectedType} robot {verifier.Name} ({blid})");
