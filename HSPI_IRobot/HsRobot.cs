@@ -256,6 +256,15 @@ namespace HSPI_IRobot {
 			return feature;
 		}
 
+		public string GetName() {
+			if (Robot?.Name != null) {
+				return Robot.Name;
+			}
+
+			HsDevice device = _plugin.GetHsController().GetDeviceByAddress(Blid);
+			return device.Name;
+		}
+
 		public enum HsRobotState {
 			Connecting,
 			Connected,

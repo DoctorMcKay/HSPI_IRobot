@@ -414,7 +414,7 @@ namespace HSPI_IRobot {
 							stateString = _hsRobots[i].StateString,
 							ip = _hsRobots[i].ConnectedIp,
 							type = _hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
-							name = _hsRobots[i].Robot?.Name ?? "Unknown",
+							name = _hsRobots[i].GetName(),
 							sku = _hsRobots[i].Robot?.Sku ?? "unknown"
 						};
 					}
@@ -430,7 +430,7 @@ namespace HSPI_IRobot {
 					robot = _hsRobots.Find(bot => bot.Blid == blid);
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
-						: JsonConvert.SerializeObject(new { status = robot.Robot.GetFullStatus() });
+						: JsonConvert.SerializeObject(new { status = robot.Robot?.GetFullStatus() });
 				
 				case "cloudLogin":
 					string cloudUsername = (string) payload.SelectToken("username");
