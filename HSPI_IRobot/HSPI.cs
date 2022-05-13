@@ -37,7 +37,7 @@ namespace HSPI_IRobot {
 				.WithLabel("plugin_status", "Status (refresh to update)", "x")
 				.WithLabel("robots_link", "Robots", "<a href=\"/iRobot/robots.html\">Manage Robots</a>")
 				.WithGroup("debug_group", "<hr>", new AbstractView[] {
-					new LabelView("debug_support_link", "Documentation", "<a href=\"https://github.com/DoctorMcKay/HSPI_iRobot/blob/master/README.md\" target=\"_blank\">GitHub</a>"), 
+					new LabelView("debug_support_link", "Support and Documentation", "<a href=\"https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay/1544987-irobot-hs4-plugin-manual\" target=\"_blank\">HomeSeer Forum</a>"), 
 					new LabelView("debug_donate_link", "Fund Future Development", "This plugin is and always will be free.<br /><a href=\"https://github.com/sponsors/DoctorMcKay\" target=\"_blank\">Please consider donating to fund future development.</a>"),
 					new LabelView("debug_system_id", "System ID (include this with any support requests)", analytics.CustomSystemId),
 					#if DEBUG
