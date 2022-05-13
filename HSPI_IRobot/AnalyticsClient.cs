@@ -14,6 +14,7 @@ namespace HSPI_IRobot {
 	public class AnalyticsClient {
 		private const string ReportUrl = "https://hsstats.doctormckay.com/report.php";
 		private const string ErrorReportUrl = "https://hsstats.doctormckay.com/error.php";
+		private const string DebugReportUrl = "https://hsstats.doctormckay.com/debug_report.php";
 		private const string GlobalIniFilename = "DrMcKayGlobal.ini";
 
 		public string CustomSystemId {
@@ -104,6 +105,25 @@ namespace HSPI_IRobot {
 			}
 		}
 
+		public async Task<DebugReportResponse> DebugReport(object report) {
+			try {
+				ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+
+				using (HttpClient client = new HttpClient()) {
+					string jsonReport = JsonConvert.SerializeObject(new {
+						AnalyticsData = _gatherData(),
+						DebugReport = report
+					});
+
+					using (HttpResponseMessage res = await client.PostAsync(DebugReportUrl, new StringContent(jsonReport, Encoding.UTF8, "application/json"))) {
+						return new DebugReportResponse(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
+					}
+				}
+			} catch (Exception ex) {
+				return new DebugReportResponse(false, ex.Message);
+			}
+		}
+
 		private string _getMonoVersion() {
 			Type type = Type.GetType("Mono.Runtime");
 			if (type != null) {
@@ -130,18 +150,28 @@ namespace HSPI_IRobot {
 				HsEdition = (int) _hs.GetHSEdition()
 			};
 		}
-	}
+		
+		private struct AnalyticsData {
+			public string CustomSystemId;
+			public string PluginId;
+			public string PluginVersion;
+			public string SystemEnvironmentVersion;
+			public string SystemOsVersion;
+			public string MonoVersion;
+			public string HsVersion;
+			public string HsAppPath;
+			public int HsOsType;
+			public int HsEdition;
+		}
 
-	internal struct AnalyticsData {
-		public string CustomSystemId;
-		public string PluginId;
-		public string PluginVersion;
-		public string SystemEnvironmentVersion;
-		public string SystemOsVersion;
-		public string MonoVersion;
-		public string HsVersion;
-		public string HsAppPath;
-		public int HsOsType;
-		public int HsEdition;
+		public class DebugReportResponse {
+			public readonly bool Success;
+			public readonly string Message;
+
+			internal DebugReportResponse(bool success, string message) {
+				Success = success;
+				Message = message;
+			}
+		}
 	}
 }

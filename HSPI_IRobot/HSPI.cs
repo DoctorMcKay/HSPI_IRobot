@@ -25,11 +25,12 @@ namespace HSPI_IRobot {
 		private RobotDiscovery _robotDiscovery;
 		private RobotCloudAuth _robotCloudAuth;
 		private string _addRobotResult;
+		private AnalyticsClient _analyticsClient;
 
 		protected override void Initialize() {
 			WriteLog(ELogType.Debug, "Initializing");
 			
-			AnalyticsClient analytics = new AnalyticsClient(this, HomeSeerSystem);
+			_analyticsClient = new AnalyticsClient(this, HomeSeerSystem);
 			
 			// Build the settings page
 			PageFactory settingsPageFactory = PageFactory
@@ -39,7 +40,7 @@ namespace HSPI_IRobot {
 				.WithGroup("debug_group", "<hr>", new AbstractView[] {
 					new LabelView("debug_support_link", "Support and Documentation", "<a href=\"https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay/1544987-irobot-hs4-plugin-manual\" target=\"_blank\">HomeSeer Forum</a>"), 
 					new LabelView("debug_donate_link", "Fund Future Development", "This plugin is and always will be free.<br /><a href=\"https://github.com/sponsors/DoctorMcKay\" target=\"_blank\">Please consider donating to fund future development.</a>"),
-					new LabelView("debug_system_id", "System ID (include this with any support requests)", analytics.CustomSystemId),
+					new LabelView("debug_system_id", "System ID (include this with any support requests)", _analyticsClient.CustomSystemId),
 					#if DEBUG
 						new LabelView("debug_log", "Enable Debug Logging", "ON - DEBUG BUILD")
 					#else
@@ -54,7 +55,7 @@ namespace HSPI_IRobot {
 			// Initialize our device list
 			InitializeDeviceList();
 			
-			analytics.ReportIn(5000);
+			_analyticsClient.ReportIn(5000);
 		}
 
 		private async void InitializeDeviceList() {
@@ -476,6 +477,15 @@ namespace HSPI_IRobot {
 					HsDevice device = HomeSeerSystem.GetDeviceByAddress(blid);
 					HomeSeerSystem.DeleteDevice(device.Ref);
 					return successResponse;
+				
+				case "debugReport":
+					// We're going to do this synchronously because it shouldn't happen often
+					Task<AnalyticsClient.DebugReportResponse> reportTask = _analyticsClient.DebugReport(new { Robots = _hsRobots });
+					reportTask.Wait();
+					AnalyticsClient.DebugReportResponse response = reportTask.Result;
+					return response.Success
+						? JsonConvert.SerializeObject(new { report_id = response.Message })
+						: JsonConvert.SerializeObject(new { error = response.Message });
 
 				default:
 					return badCmdResponse;
