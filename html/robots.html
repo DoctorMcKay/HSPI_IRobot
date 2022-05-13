@@ -112,6 +112,13 @@
 				
 				<div id="cloud-robots-table-body" class="irobot-table-body"></div>
 			</div>
+			
+			<!-- Support -->
+			<div class="streakhs grey lighten-2">Support</div>
+			<a href="https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay/1544987-irobot-hs4-plugin-manual" class="btn btn-cancel" target="_blank">iRobot HS4 Plugin Manual</a>
+			<a href="https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay" class="btn btn-cancel" target="_blank">Support</a>
+			<button type="button" id="btn-debugreport" class="btn btn-cancel">Send Debug Report</button>
+			<p id="debug-report-output"></p>
 		</div>
 		
 		<!-- Robot info modal -->
@@ -230,6 +237,17 @@
 				$('#btn-fullstatus').click(async function() {
 					let {status} = await ajaxCmd('getRobotFullStatus', {blid: $('#robot-modal-blid').text()});
 					$('#robot-full-status').val(JSON.stringify(status, undefined, '\t')).show();
+				});
+				$('#btn-debugreport').click(async function() {
+					let confirmed = confirm('Send a debug report? This will send all of your robots\' data to the plugin author.');
+					if (!confirmed) {
+						return;
+					}
+					
+					$('#btn-debugreport').prop('disabled', true);
+					
+					let result = await ajaxCmd('debugReport');
+					$('#debug-report-output').text(result.error ? `Error: ${result.error}` : `Report sent! Report ID: ${result.report_id}`);
 				});
 				
 				// The page has just loaded. Get our robot list.
