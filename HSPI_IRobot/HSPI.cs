@@ -435,7 +435,7 @@ namespace HSPI_IRobot {
 					robot = _hsRobots.Find(bot => bot.Blid == blid);
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
-						: JsonConvert.SerializeObject(new { status = robot.Robot?.GetFullStatus() });
+						: JsonConvert.SerializeObject(new { status = robot.Robot?.ReportedState });
 				
 				case "cloudLogin":
 					string cloudUsername = (string) payload.SelectToken("username");
@@ -505,7 +505,7 @@ namespace HSPI_IRobot {
 					
 					if (verifier.DetectedType == RobotType.Unrecognized) {
 						WriteLog(ELogType.Debug, "Unrecognized robot type");
-						WriteLog(ELogType.Debug, verifier.GetFullStatus().ToString());
+						WriteLog(ELogType.Debug, verifier.ReportedState.ToString());
 						_addRobotResult = "Unrecognized robot type";
 						return;
 					}

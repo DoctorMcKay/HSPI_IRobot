@@ -16,6 +16,7 @@ using Timer = System.Timers.Timer;
 namespace IRobotLANClient {
 	public abstract class Robot {
 		public bool Connected { get; private set; }
+		public JObject ReportedState { get; private set; } = new JObject();
 		public string Name { get; private set; }
 		public string Sku { get; private set; }
 		public byte BatteryLevel { get; private set; }
@@ -38,8 +39,6 @@ namespace IRobotLANClient {
 		protected readonly string Password;
 
 		protected string MqttStatusTopic => $"$aws/things/{Blid}/shadow/update";
-
-		protected JObject ReportedState = new JObject();
 		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
 
 		private bool _awaitingFirstReport;
@@ -370,10 +369,6 @@ namespace IRobotLANClient {
 				_pingTimer?.Stop();
 				CancellationTokenSource.Cancel(); // also cancel any outstanding comunication
 			}
-		}
-
-		public JObject GetFullStatus() {
-			return ReportedState;
 		}
 
 		protected void DebugOutput(string output) {
