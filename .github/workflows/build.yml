@@ -32,6 +32,8 @@ jobs:
         cp HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
         cp html\*.* artifacts
         cp install.txt artifacts\install.txt
+        for /f "tokens=1,2 delims==" %%i in ('wmic datafile where "name='D:\\a\\HSPI_IRobot\\HSPI_IRobot\\bin\\Release\\HSPI_IRobot.exe'" get version /format:list') do if "%%i"=="Version" set BINARY_VERSION=%%j
+        for /f "tokens=1,2,3,4 delims=." %%i in ('echo %BINARY_VERSION%') do echo RELEASE_VERSION=%%i-%%j-%%k-%%l >> %GITHUB_ENV%
     
     - name: Stage debug artifacts
       run: |
@@ -44,7 +46,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v1
       with:
-        name: Plugin
+        name: iRobot_${{ env.RELEASE_VERSION }}
         path: artifacts
     
     - name: Upload debug artifacts
