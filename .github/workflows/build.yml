@@ -32,7 +32,9 @@ jobs:
         cp HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
         cp html\*.* artifacts
         cp install.txt artifacts\install.txt
-        "RELEASE_VERSION=" + (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-') >> $GITHUB_ENV
+        Set-Variable -Name release_version -Value (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-')
+        echo "release_version=$release_version"
+        echo "release_version=$release_version" >> $GITHUB_ENV
     
     - name: Stage debug artifacts
       run: |
@@ -43,13 +45,13 @@ jobs:
         cp HSPI_IRobot.exe.config artifacts-debug\HSPI_IRobot.exe.config
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v3
       with:
-        name: iRobot_${{ env.RELEASE_VERSION }}
+        name: iRobot_${{ env.release_version }}
         path: artifacts
     
     - name: Upload debug artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v3
       with:
         name: Debug Build
         path: artifacts-debug
