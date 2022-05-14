@@ -43,7 +43,6 @@ namespace IRobotLANClient {
 		private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 		private bool _awaitingFirstReport;
 		private Timer _startupTimer;
-		private Timer _pingTimer;
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -347,7 +346,6 @@ namespace IRobotLANClient {
 				OnConnected?.Invoke(this, null);
 			} else {
 				OnDisconnected?.Invoke(this, null);
-				_pingTimer?.Stop();
 				SignalCancellation(); // also cancel any outstanding communication
 			}
 		}
