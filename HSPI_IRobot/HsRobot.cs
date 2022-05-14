@@ -90,7 +90,7 @@ namespace HSPI_IRobot {
 
 			// We are now connected, but waiting to make sure the robot type is correct
 			DateTime dataUpdateWaitStart = DateTime.Now;
-			while (DateTime.Now.Subtract(dataUpdateWaitStart).TotalSeconds < 5) {
+			while (DateTime.Now.Subtract(dataUpdateWaitStart).TotalSeconds < 10) {
 				if (_robotTypeFailedValidation) {
 					UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Robot credentials are correct, but are not for the expected type of robot");
 					EnqueueReconnectAttempt();
