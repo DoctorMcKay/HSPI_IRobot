@@ -34,7 +34,7 @@ jobs:
         cp install.txt artifacts\install.txt
         Set-Variable -Name release_version -Value (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-')
         echo "release_version=$release_version"
-        echo "release_version=$release_version" >> $GITHUB_ENV
+        echo "release_version=$release_version" >> $env:GITHUB_ENV
     
     - name: Stage debug artifacts
       run: |
