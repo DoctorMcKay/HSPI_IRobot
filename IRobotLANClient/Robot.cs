@@ -69,6 +69,8 @@ namespace IRobotLANClient {
 				.WithClientId(Blid)
 				.WithTls(tlsParams)
 				.WithProtocolVersion(MqttProtocolVersion.V311)
+				.WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
+				.WithCommunicationTimeout(TimeSpan.FromSeconds(5))
 				.Build();
 
 			MqttHandler handler = new MqttHandler(this);
@@ -163,45 +165,7 @@ namespace IRobotLANClient {
 			}
 		}
 
-		private void EnqueuePing() {
-			_pingTimer?.Stop();
-			_pingTimer = new Timer {
-				AutoReset = false,
-				Enabled = true,
-				Interval = 10000
-			};
-			
-			// Under normal circumstances, we wouldn't expect the 10s interval to elapse and thus we wouldn't actually
-			// send any pings. The "wifistat" topic gets published to very frequently, at least every 10s.
-			
-			_pingTimer.Elapsed += async (sender, args) => {
-				#if DEBUG
-					Console.WriteLine("Sending ping");
-				#endif
-
-				try {
-					await MqttClient.PingAsync(_cancellationTokenSource.Token);
-					
-					#if DEBUG
-						Console.WriteLine("Pong received");
-					#endif
-				} catch (Exception) {
-					// We don't have to actually do anything with this exception. The MqttClient will realize that it
-					// never received an ack of this transmission and fire the Disconnected handler on its own. We just
-					// needed to send something for it to expect an ack.
-					
-					#if DEBUG
-						Console.WriteLine("Ping response failed");
-					#endif
-				}
-
-				EnqueuePing();
-			};
-		}
-
 		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
-			EnqueuePing();
-
 			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
