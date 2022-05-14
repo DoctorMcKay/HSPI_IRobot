@@ -29,9 +29,14 @@ namespace IRobotLANClient {
 					uint broadcastAddress = addressLong | ~netMask;
 
 					UdpClient client = new UdpClient();
-					client.EnableBroadcast = true;
-					client.Client.ReceiveTimeout = 5000;
-					client.Client.Bind(new IPEndPoint(address.Address, 0));
+					try {
+						client.EnableBroadcast = true;
+						client.Client.ReceiveTimeout = 5000;
+						client.Client.Bind(new IPEndPoint(address.Address, 0));
+					} catch (SocketException) {
+						// Can't bind to this address
+						continue;
+					}
 
 					bool disposed = false;
 					
