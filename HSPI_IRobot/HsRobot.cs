@@ -41,9 +41,9 @@ namespace HSPI_IRobot {
 			Password = HsDevice.PlugExtraData["password"];
 		}
 
-		public async Task AttemptConnect(string ip = null) {
-			if (State == HsRobotState.Connecting) {
-				_plugin.WriteLog(ELogType.Debug, "Aborting AttemptConnect because our state is already Connecting");
+		public async Task AttemptConnect(string ip = null, bool skipStateCheck = false) {
+			if (State == HsRobotState.Connecting && !skipStateCheck) {
+				_plugin.WriteLog(ELogType.Warning, "Aborting AttemptConnect because our state is already Connecting");
 				return;
 			}
 			
@@ -84,7 +84,7 @@ namespace HSPI_IRobot {
 				}
 				
 				// We found it at a new IP, so let's try connecting again
-				await AttemptConnect(discoveredRobotIp);
+				await AttemptConnect(discoveredRobotIp, true);
 				return;
 			}
 
