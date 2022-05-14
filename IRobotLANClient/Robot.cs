@@ -117,6 +117,10 @@ namespace IRobotLANClient {
 			SendCommand("find");
 		}
 
+		public void Train() {
+			SendCommand("train");
+		}
+
 		protected async void SendCommand(string command) {
 			DateTime unixEpoch = new DateTime(1970, 1, 1);
 

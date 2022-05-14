@@ -89,9 +89,9 @@ namespace HSPI_IRobot {
 			foreach (ControlEvent ctrl in colSend) {
 				HsFeature feature = HomeSeerSystem.GetFeatureByRef(ctrl.TargetRef);
 				string[] addressParts = feature.Address.Split(':');
-				HsRobot robot = _hsRobots.Find(robo => robo.Blid == addressParts[0]);
-				if (robot == null) {
-					WriteLog(ELogType.Warning, $"Got SetIOMulti {ctrl.TargetRef} = {ctrl.ControlValue}, but no such robot found");
+				HsRobot robot = _hsRobots.Find(r => r.Blid == addressParts[0]);
+				if (robot?.Robot == null) {
+					WriteLog(ELogType.Warning, $"Got SetIOMulti {ctrl.TargetRef} = {ctrl.ControlValue}, but no such robot found or not connected");
 					continue;
 				}
 
@@ -127,6 +127,10 @@ namespace HSPI_IRobot {
 							roboVac.Evac();
 						}
 
+						break;
+					
+					case RobotStatus.Train:
+						robot.Robot.Train();
 						break;
 				}
 			}
