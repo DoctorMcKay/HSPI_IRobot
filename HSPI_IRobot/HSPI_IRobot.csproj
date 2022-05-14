@@ -60,6 +60,7 @@
         <Compile Include="FeatureUpdater.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />
+        <Compile Include="RobotCloudAuth.cs" />
         <Compile Include="Program.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

@@ -23,21 +23,24 @@ namespace HSPI_IRobot {
 
 		private List<HsRobot> _hsRobots;
 		private RobotDiscovery _robotDiscovery;
+		private RobotCloudAuth _robotCloudAuth;
 		private string _addRobotResult;
+		private AnalyticsClient _analyticsClient;
 
 		protected override void Initialize() {
 			WriteLog(ELogType.Debug, "Initializing");
 			
-			AnalyticsClient analytics = new AnalyticsClient(this, HomeSeerSystem);
+			_analyticsClient = new AnalyticsClient(this, HomeSeerSystem);
 			
 			// Build the settings page
 			PageFactory settingsPageFactory = PageFactory
 				.CreateSettingsPage("iRobotSettings", "iRobot Settings")
 				.WithLabel("plugin_status", "Status (refresh to update)", "x")
+				.WithLabel("robots_link", "Robots", "<a href=\"/iRobot/robots.html\">Manage Robots</a>")
 				.WithGroup("debug_group", "<hr>", new AbstractView[] {
-					new LabelView("debug_support_link", "Documentation", "<a href=\"https://github.com/DoctorMcKay/HSPI_iRobot/blob/master/README.md\" target=\"_blank\">GitHub</a>"), 
+					new LabelView("debug_support_link", "Support and Documentation", "<a href=\"https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay/1544987-irobot-hs4-plugin-manual\" target=\"_blank\">HomeSeer Forum</a>"), 
 					new LabelView("debug_donate_link", "Fund Future Development", "This plugin is and always will be free.<br /><a href=\"https://github.com/sponsors/DoctorMcKay\" target=\"_blank\">Please consider donating to fund future development.</a>"),
-					new LabelView("debug_system_id", "System ID (include this with any support requests)", analytics.CustomSystemId),
+					new LabelView("debug_system_id", "System ID (include this with any support requests)", _analyticsClient.CustomSystemId),
 					#if DEBUG
 						new LabelView("debug_log", "Enable Debug Logging", "ON - DEBUG BUILD")
 					#else
@@ -52,7 +55,7 @@ namespace HSPI_IRobot {
 			// Initialize our device list
 			InitializeDeviceList();
 			
-			analytics.ReportIn(5000);
+			_analyticsClient.ReportIn(5000);
 		}
 
 		private async void InitializeDeviceList() {
@@ -342,10 +345,13 @@ namespace HSPI_IRobot {
 		}
 
 		public override string PostBackProc(string page, string data, string user, int userRights) {
-			WriteLog(ELogType.Debug, $"PostBackProc page name {page} by user {user} with rights {userRights}");
+			WriteLog(ELogType.Trace, $"PostBackProc page name {page} by user {user} with rights {userRights}");
 			
 			if ((userRights & 2) != 2) {
-				return JsonConvert.SerializeObject(new { error = "You do not have administrative privileges." });
+				return JsonConvert.SerializeObject(new {
+					error = "Access Denied",
+					fatal = true
+				});
 			}
 			
 			switch (page) {
@@ -371,6 +377,7 @@ namespace HSPI_IRobot {
 			
 			// Shared variables between multiple cases
 			string blid;
+			HsRobot robot;
 
 			switch (cmd) {
 				case "autodiscover":
@@ -404,21 +411,21 @@ namespace HSPI_IRobot {
 							return successResponse;
 						
 						default:
-							return JsonConvert.SerializeObject(new { success = false, error = _addRobotResult });
+							return JsonConvert.SerializeObject(new { error = _addRobotResult });
 					}
 
 				case "getRobots":
-					JObject[] robots = new JObject[_hsRobots.Count];
+					object[] robots = new object[_hsRobots.Count];
 					for (int i = 0; i < _hsRobots.Count; i++) {
-						JObject robotData = new JObject();
-						robotData.Add("blid", JToken.FromObject(_hsRobots[i].Blid));
-						robotData.Add("password", JToken.FromObject(_hsRobots[i].Password));
-						robotData.Add("stateString", JToken.FromObject(_hsRobots[i].StateString));
-						robotData.Add("ip", JToken.FromObject(_hsRobots[i].ConnectedIp));
-						robotData.Add("type", JToken.FromObject(_hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop"));
-						robotData.Add("name", JToken.FromObject(_hsRobots[i].Robot?.Name ?? "Unknown"));
-						robotData.Add("sku", JToken.FromObject(_hsRobots[i].Robot?.Sku ?? "unknown"));
-						robots[i] = robotData;
+						robots[i] = new {
+							blid = _hsRobots[i].Blid,
+							password = _hsRobots[i].Password,
+							stateString = _hsRobots[i].StateString,
+							ip = _hsRobots[i].ConnectedIp,
+							type = _hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
+							name = _hsRobots[i].GetName(),
+							sku = _hsRobots[i].Robot?.Sku ?? "unknown"
+						};
 					}
 					
 					return JsonConvert.SerializeObject(new { robots });
@@ -429,10 +436,60 @@ namespace HSPI_IRobot {
 						return badCmdResponse;
 					}
 
-					HsRobot robot = _hsRobots.Find(bot => bot.Blid == blid);
+					robot = _hsRobots.Find(bot => bot.Blid == blid);
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
-						: JsonConvert.SerializeObject(new { status = robot.Robot.GetFullStatus() });
+						: JsonConvert.SerializeObject(new { status = robot.Robot?.ReportedState });
+				
+				case "cloudLogin":
+					string cloudUsername = (string) payload.SelectToken("username");
+					string cloudPassword = (string) payload.SelectToken("password");
+					if (cloudUsername == null || cloudPassword == null) {
+						return badCmdResponse;
+					}
+
+					_robotCloudAuth = new RobotCloudAuth(this, cloudUsername, cloudPassword);
+					_robotCloudAuth.Login();
+					return successResponse;
+				
+				case "cloudLoginResult":
+					if (_robotCloudAuth == null || _robotCloudAuth.LoginInProcess) {
+						return badCmdResponse;
+					}
+
+					if (_robotCloudAuth.LoginError != null) {
+						return JsonConvert.SerializeObject(new {
+							error = _robotCloudAuth.LoginError.Message
+						});
+					}
+
+					return JsonConvert.SerializeObject(new {
+						robots = _robotCloudAuth.Robots
+					});
+				
+				case "deleteRobot":
+					blid = (string) payload.SelectToken("blid");
+
+					robot = _hsRobots.Find(r => r.Blid == blid);
+					if (robot == null) {
+						return badCmdResponse;
+					}
+					
+					robot.Disconnect();
+					_hsRobots.Remove(robot);
+
+					HsDevice device = HomeSeerSystem.GetDeviceByAddress(blid);
+					HomeSeerSystem.DeleteDevice(device.Ref);
+					return successResponse;
+				
+				case "debugReport":
+					// We're going to do this synchronously because it shouldn't happen often
+					Task<AnalyticsClient.DebugReportResponse> reportTask = _analyticsClient.DebugReport(new { Robots = _hsRobots });
+					reportTask.Wait();
+					AnalyticsClient.DebugReportResponse response = reportTask.Result;
+					return response.Success
+						? JsonConvert.SerializeObject(new { report_id = response.Message })
+						: JsonConvert.SerializeObject(new { error = response.Message });
 
 				default:
 					return badCmdResponse;
@@ -451,6 +508,8 @@ namespace HSPI_IRobot {
 					await verifier.Disconnect();
 					
 					if (verifier.DetectedType == RobotType.Unrecognized) {
+						WriteLog(ELogType.Debug, "Unrecognized robot type");
+						WriteLog(ELogType.Debug, verifier.ReportedState.ToString());
 						_addRobotResult = "Unrecognized robot type";
 						return;
 					}

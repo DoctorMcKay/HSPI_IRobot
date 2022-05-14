@@ -16,6 +16,7 @@ using Timer = System.Timers.Timer;
 namespace IRobotLANClient {
 	public abstract class Robot {
 		public bool Connected { get; private set; }
+		public JObject ReportedState { get; private set; } = new JObject();
 		public string Name { get; private set; }
 		public string Sku { get; private set; }
 		public byte BatteryLevel { get; private set; }
@@ -37,10 +38,11 @@ namespace IRobotLANClient {
 		protected readonly string Blid;
 		protected readonly string Password;
 
-		protected JObject ReportedState = new JObject();
-		protected readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
+		private string MqttStatusTopic => $"$aws/things/{Blid}/shadow/update";
 
-		private Timer _pingTimer = null;
+		private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+		private bool _awaitingFirstReport;
+		private Timer _startupTimer;
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -66,6 +68,8 @@ namespace IRobotLANClient {
 				.WithClientId(Blid)
 				.WithTls(tlsParams)
 				.WithProtocolVersion(MqttProtocolVersion.V311)
+				.WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
+				.WithCommunicationTimeout(TimeSpan.FromSeconds(5))
 				.Build();
 
 			MqttHandler handler = new MqttHandler(this);
@@ -76,11 +80,33 @@ namespace IRobotLANClient {
 			#if DEBUG
 				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
 			#endif
+			
+			_awaitingFirstReport = true;
 
-			MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, CancellationTokenSource.Token);
-			ReportedState = new JObject(); // Reset reported state
+			Timer connectTimeout = new Timer {
+				Enabled = true,
+				AutoReset = false,
+				Interval = 10000
+			};
 
-			return result;
+			connectTimeout.Elapsed += (sender, args) => {
+				SignalCancellation();
+			};
+
+			DateTime connectStartTime = DateTime.Now;
+			try {
+				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
+				connectTimeout.Stop();
+				
+				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
+				// but let's subscribe anyway just to be a good citizen
+				await MqttClient.SubscribeAsync(MqttStatusTopic);
+				ReportedState = new JObject(); // Reset reported state
+
+				return result;
+			} catch (OperationCanceledException) {
+				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
+			}
 		}
 
 		public async Task Disconnect() {
@@ -136,66 +162,28 @@ namespace IRobotLANClient {
 			};
 
 			try {
-				await MqttClient.PublishAsync(msg, CancellationTokenSource.Token);
+				await MqttClient.PublishAsync(msg, _cancellationTokenSource.Token);
 			} catch (Exception) {
 				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
 			}
 		}
 
-		private void EnqueuePing() {
-			_pingTimer?.Stop();
-			_pingTimer = new Timer {
-				AutoReset = false,
-				Enabled = true,
-				Interval = 10000
-			};
-			
-			// Under normal circumstances, we wouldn't expect the 10s interval to elapse and thus we wouldn't actually
-			// send any pings. The "wifistat" topic gets published to very frequently, at least every 10s.
-			
-			_pingTimer.Elapsed += async (sender, args) => {
-				#if DEBUG
-					Console.WriteLine("Sending ping");
-				#endif
-
-				try {
-					await MqttClient.PingAsync(CancellationTokenSource.Token);
-					
-					#if DEBUG
-						Console.WriteLine("Pong received");
-					#endif
-				} catch (Exception) {
-					// We don't have to actually do anything with this exception. The MqttClient will realize that it
-					// never received an ack of this transmission and fire the Disconnected handler on its own. We just
-					// needed to send something for it to expect an ack.
-					
-					#if DEBUG
-						Console.WriteLine("Ping response failed");
-					#endif
-				}
-
-				EnqueuePing();
-			};
-		}
-
 		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
-			EnqueuePing();
-			
-			string jsonPayload = System.Text.Encoding.UTF8.GetString(msg.Payload);
+			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
-			bool isStatusUpdate = msg.Topic == $"$aws/things/{Blid}/shadow/update";
+			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
 
-			#if DEBUG
-				if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
-					Console.WriteLine($"Received message with topic {msg.Topic}");
-				}
-			#endif
+#if DEBUG
+			if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
+				Console.WriteLine($"Received message with topic {msg.Topic}");
+			}
+#endif
 
 			if (!isStatusUpdate) {
 				return;
 			}
-			
+
 			// This is a robot status update
 
 			JObject stateUpdate = (JObject) payload.SelectToken("state.reported");
@@ -203,10 +191,10 @@ namespace IRobotLANClient {
 				// This shouldn't ordinarily happen, but in case it does...
 				return;
 			}
-			
+
 			// First let's find the differences between the two objects for debugging purposes
 			JObject previousReportedState = JObject.Parse(ReportedState.ToString());
-				
+
 			foreach (JProperty prop in stateUpdate.Properties()) {
 				ReportedState[prop.Name] = prop.Value;
 			}
@@ -214,32 +202,57 @@ namespace IRobotLANClient {
 			foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
 				DebugOutput(change);
 			}
+			
+			// Some robots don't send their entire state all at once upon connecting, which can cause problems since
+			// a lot of our code expects the entire state to be there once we receive a report. So let's wait 1 second
+			// after receiving the first report for additional reports to come in.
 
-			Name = (string) ReportedState.SelectToken("name");
-			Sku = (string) ReportedState.SelectToken("sku");
-			BatteryLevel = (byte) ReportedState.SelectToken("batPct");
+			if (_awaitingFirstReport) {
+				_awaitingFirstReport = false;
+				
+				_startupTimer = new Timer {
+					AutoReset = false,
+					Enabled = true,
+					Interval = 1000
+				};
+
+				_startupTimer.Elapsed += (sender, args) => {
+					_startupTimer = null;
+					ProcessStateUpdate();
+				};
+			}
+
+			if (_startupTimer == null) {
+				ProcessStateUpdate();
+			}
+		}
+		
+		private void ProcessStateUpdate() {
+			Name = (string) (ReportedState.SelectToken("name") ?? "");
+			Sku = (string) (ReportedState.SelectToken("sku") ?? "");
+			BatteryLevel = (byte) (ReportedState.SelectToken("batPct") ?? 0);
 			ChildLock = (bool) (ReportedState.SelectToken("childLock") ?? JToken.FromObject(false));
 				
 #if DEBUG
 			/*
-					 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
-					 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
-					 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
-					 */
+			 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
+			 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
+			 * Notable values: none/charge (on base, no job), evac/evac (emptying bin but no job), clean/run, none/stop (off base, no job)
+			 */
 			Console.WriteLine(string.Format(
 				"Battery: {0}%, Cycle: {1}, Phase: {2}, Error: {3}, NotReady: {4}, OperatingMode: {5}, Initiator: {6}",
 				BatteryLevel,
-				(string) ReportedState.SelectToken("cleanMissionStatus.cycle"),
-				(string) ReportedState.SelectToken("cleanMissionStatus.phase"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.error"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.notReady"),
-				(int) ReportedState.SelectToken("cleanMissionStatus.operatingMode"),
-				(string) ReportedState.SelectToken("cleanMissionStatus.initiator")
+				(string) (ReportedState.SelectToken("cleanMissionStatus.cycle") ?? ""),
+				(string) (ReportedState.SelectToken("cleanMissionStatus.phase") ?? ""),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0),
+				(int) (ReportedState.SelectToken("cleanMissionStatus.operatingMode") ?? 0),
+				(string) (ReportedState.SelectToken("cleanMissionStatus.initiator") ?? 0)
 			));
 #endif
 
-			string missionCycle = (string) ReportedState.SelectToken("cleanMissionStatus.cycle");
-			string missionPhase = (string) ReportedState.SelectToken("cleanMissionStatus.phase");
+			string missionCycle = (string) (ReportedState.SelectToken("cleanMissionStatus.cycle") ?? "none");
+			string missionPhase = (string) (ReportedState.SelectToken("cleanMissionStatus.phase") ?? "stop");
 
 			switch (missionCycle) {
 				case "none":
@@ -315,9 +328,9 @@ namespace IRobotLANClient {
 					break;
 			}
 				
-			ErrorCode = (int) ReportedState.SelectToken("cleanMissionStatus.error");
-			NotReadyCode = (int) ReportedState.SelectToken("cleanMissionStatus.notReady");
-			CanLearnMaps = (bool) ReportedState.SelectToken("pmapLearningAllowed");
+			ErrorCode = (int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0);
+			NotReadyCode = (int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0);
+			CanLearnMaps = (bool) (ReportedState.SelectToken("pmapLearningAllowed") ?? false);
 			
 			HandleRobotStateUpdate();
 			
@@ -337,17 +350,18 @@ namespace IRobotLANClient {
 				OnConnected?.Invoke(this, null);
 			} else {
 				OnDisconnected?.Invoke(this, null);
-				_pingTimer?.Stop();
-				CancellationTokenSource.Cancel(); // also cancel any outstanding comunication
+				SignalCancellation(); // also cancel any outstanding communication
 			}
-		}
-
-		public JObject GetFullStatus() {
-			return ReportedState;
 		}
 
 		protected void DebugOutput(string output) {
 			OnDebugOutput?.Invoke(this, new DebugOutputEventArgs { Output = output });
+		}
+
+		private void SignalCancellation() {
+			_cancellationTokenSource.Cancel();
+			_cancellationTokenSource.Dispose();
+			_cancellationTokenSource = new CancellationTokenSource();
 		}
 
 		public class UnexpectedValueEventArgs : EventArgs {

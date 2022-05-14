@@ -40,11 +40,11 @@ namespace IRobotLANClient {
 					MopPadType = MopPadType.ReusableDry;
 					break;
 				
-				case "disposableWet": // this value is a guess
+				case "dispWet":
 					MopPadType = MopPadType.DisposableWet;
 					break;
 				
-				case "disposableDry": // this value is a guess
+				case "dispDry":
 					MopPadType = MopPadType.DisposableDry;
 					break;
 				
