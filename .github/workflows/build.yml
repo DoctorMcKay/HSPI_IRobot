@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    tags-ignore:
+    branches:
+      # Only run on branch push, not tag push
       - '**'
 
 jobs:
