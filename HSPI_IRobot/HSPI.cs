@@ -7,6 +7,7 @@ using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Devices.Controls;
+using HomeSeer.PluginSdk.Devices.Identification;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
 using IRobotLANClient;
@@ -197,11 +198,7 @@ namespace HSPI_IRobot {
 						case MissionPhase.Stop:
 							status = RobotStatus.JobPaused;
 							break;
-						
-						case MissionPhase.Stuck:
-							status = RobotStatus.Stuck;
-							break;
-						
+
 						default:
 							status = RobotStatus.Clean;
 							break;
@@ -219,6 +216,11 @@ namespace HSPI_IRobot {
 				case MissionCycle.Train:
 					status = RobotStatus.Train;
 					break;
+			}
+
+			if (robot.Robot.Phase == MissionPhase.Stuck) {
+				// Regardless of what our cycle is, if we're stuck we're stuck
+				status = RobotStatus.Stuck;
 			}
 			
 			HsFeature feature = robot.GetFeature(FeatureType.Status);
@@ -273,11 +275,12 @@ namespace HSPI_IRobot {
 			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) jobPhase);
 			
 			// Battery
+			bool isCharging = robot.Robot.BatteryLevel < 100 && robot.Robot.Phase == MissionPhase.Charge;
 			feature = robot.GetFeature(FeatureType.Battery);
 			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.BatteryLevel);
 			HomeSeerSystem.UpdateFeatureValueStringByRef(
 				feature.Ref,
-				$"{robot.Robot.BatteryLevel}%" + (robot.Robot.BatteryLevel < 100 && robot.Robot.Phase == MissionPhase.Charge ? " (charging)" : "")
+				isCharging ? $"{robot.Robot.BatteryLevel}% (charging)" : ""
 			);
 			
 			// Ready
@@ -533,12 +536,6 @@ namespace HSPI_IRobot {
 			extraData.AddNamed("robottype", verifier.DetectedType == RobotType.Vacuum ? "vacuum" : "mop");
 			extraData.AddNamed("version", "1");
 
-			PlugExtraData versionExtraData = new PlugExtraData();
-			versionExtraData.AddNamed("version", "1");
-
-			PlugExtraData versionTwoExtraData = new PlugExtraData();
-			versionTwoExtraData.AddNamed("version", "2");
-			
 			DeviceFactory factory = DeviceFactory.CreateDevice(Id)
 				.WithName(verifier.Name)
 				.WithAddress(blid)
@@ -546,7 +543,7 @@ namespace HSPI_IRobot {
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Status")
 					.WithAddress($"{blid}:Status")
-					.WithExtraData(versionExtraData)
+					.WithExtraData(_versionExtraData(1))
 					.WithDisplayType(EFeatureDisplayType.Important)
 					.AddGraphicForValue("/images/HomeSeer/status/off.gif", (double) RobotStatus.OnBase, "On Home Base")
 					.AddGraphicForValue("/images/HomeSeer/status/on.gif", (double) RobotStatus.Clean, "Cleaning")
@@ -566,7 +563,7 @@ namespace HSPI_IRobot {
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Job Phase")
 					.WithAddress($"{blid}:JobPhase")
-					.WithExtraData(versionExtraData)
+					.WithExtraData(_versionExtraData(1))
 					.AddGraphicForValue("/images/HomeSeer/status/off.gif", (double) CleanJobPhase.NoJob, "No Job")
 					.AddGraphicForValue("/images/HomeSeer/status/play.png", (double) CleanJobPhase.Cleaning, "Cleaning")
 					.AddGraphicForValue("/images/HomeSeer/status/electricity.gif", (double) CleanJobPhase.Charging, "Charging")
@@ -578,13 +575,14 @@ namespace HSPI_IRobot {
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Battery")
 					.WithAddress($"{blid}:Battery")
-					.WithExtraData(versionExtraData)
-					.AddGraphicForRange("/images/HomeSeer/status/battery_0.png", 0, 10)
-					.AddGraphicForRange("/images/HomeSeer/status/battery_25.png", 11, 37)
-					.AddGraphicForRange("/images/HomeSeer/status/battery_50.png", 38, 63)
-					.AddGraphicForRange("/images/HomeSeer/status/battery_75.png", 64, 88)
-					.AddGraphicForRange("/images/HomeSeer/status/battery_100.png", 89, 100)
-					.WithDisplayType(EFeatureDisplayType.Important)
+					.WithExtraData(_versionExtraData(2))
+					.AsType(EFeatureType.Generic, (int) EGenericFeatureSubType.Battery)
+					.WithMiscFlags(EMiscFlag.StatusOnly)
+					.AddGraphic(new StatusGraphic("/images/HomeSeer/status/battery_0.png", new ValueRange(0, 10) {Suffix = "%"}) {Value = 0}) // manually specifying Value is necessary to avoid an error
+					.AddGraphic(new StatusGraphic("/images/HomeSeer/status/battery_25.png", new ValueRange(11, 37) {Suffix = "%"}) {Value = 11})
+					.AddGraphic(new StatusGraphic("/images/HomeSeer/status/battery_50.png", new ValueRange(38, 63) {Suffix = "%"}) {Value = 38})
+					.AddGraphic(new StatusGraphic("/images/HomeSeer/status/battery_75.png", new ValueRange(64, 88) {Suffix = "%"}) {Value = 64})
+					.AddGraphic(new StatusGraphic("/images/HomeSeer/status/battery_100.png", new ValueRange(89, 100) {Suffix = "%"}) {Value = 89})
 				);
 
 			switch (verifier.DetectedType) {
@@ -592,7 +590,7 @@ namespace HSPI_IRobot {
 					factory.WithFeature(FeatureFactory.CreateFeature(Id)
 						.WithName("Bin")
 						.WithAddress($"{blid}:VacuumBin")
-						.WithExtraData(versionExtraData)
+						.WithExtraData(_versionExtraData(1))
 						.AddGraphicForValue("/images/HomeSeer/status/ok.png", (double) BinStatus.Ok, "OK")
 						.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) BinStatus.Full, "Full")
 						.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) BinStatus.NotPresent, "Removed")
@@ -603,7 +601,7 @@ namespace HSPI_IRobot {
 					factory.WithFeature(FeatureFactory.CreateFeature(Id)
 							.WithName("Tank")
 							.WithAddress($"{blid}:MopTank")
-							.WithExtraData(versionExtraData)
+							.WithExtraData(_versionExtraData(1))
 							.AddGraphicForValue("/images/HomeSeer/status/ok.png", (double) TankStatus.Ok, "OK")
 							.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) TankStatus.Empty, "Empty")
 							.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) TankStatus.LidOpen, "Lid Open")
@@ -611,7 +609,7 @@ namespace HSPI_IRobot {
 						.WithFeature(FeatureFactory.CreateFeature(Id)
 							.WithName("Pad")
 							.WithAddress($"{blid}:MopPad")
-							.WithExtraData(versionExtraData)
+							.WithExtraData(_versionExtraData(1))
 							.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) MopPadType.Invalid, "None")
 							.AddGraphicForValue("/images/HomeSeer/status/water.gif", (double) MopPadType.DisposableWet, "Disposable Wet")
 							.AddGraphicForValue("/images/HomeSeer/status/luminance-00.png", (double) MopPadType.DisposableDry, "Disposable Dry")
@@ -624,7 +622,7 @@ namespace HSPI_IRobot {
 			factory.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Readiness")
 					.WithAddress($"{blid}:Ready")
-					.WithExtraData(versionTwoExtraData)
+					.WithExtraData(_versionExtraData(3))
 					.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "Ready")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 1, "Near a cliff")
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", 2, "Both wheels dropped")
@@ -651,7 +649,7 @@ namespace HSPI_IRobot {
 				.WithFeature(FeatureFactory.CreateFeature(Id)
 					.WithName("Error")
 					.WithAddress($"{blid}:Error")
-					.WithExtraData(versionTwoExtraData)
+					.WithExtraData(_versionExtraData(2))
 					.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "No Error")
 					.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 1, 255)
 					.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.DisconnectedFromRobot, "Disconnected from robot")
@@ -687,6 +685,12 @@ namespace HSPI_IRobot {
 			}
 
 			await InitializeDevice(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
+		}
+
+		private PlugExtraData _versionExtraData(int version) {
+			PlugExtraData data = new PlugExtraData();
+			data.AddNamed("version", version.ToString());
+			return data;
 		}
 
 		public IHsController GetHsController() {
