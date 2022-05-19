@@ -22,6 +22,13 @@ jobs:
       
     - name: Nuget restore
       run: nuget restore HSPI_IRobot.sln
+    
+    - name: Generate assembly version
+      run: |
+        $assemblyinfo = Get-Content -Path .\HSPI_IRobot\Properties\AssemblyInfo.cs
+        $assemblyversion_line = ($assemblyinfo | Select-String -Pattern "^\[assembly: AssemblyVersion").Line
+        $new_version_line = '[assembly: AssemblyVersion("' + $assemblyversion_line.split('"')[1].split('.')[0] + '.' + (Get-Date -UFormat "%y.%V") + '.' + ($env:GITHUB_RUN_NUMBER % 100) + '")]'
+        $assemblyinfo.Replace($assemblyversion_line, $new_version_line) | Set-Content -Path .\HSPI_IRobot\Properties\AssemblyInfo.cs -Encoding utf8
       
     - name: MSBuild
       run: |
@@ -36,7 +43,7 @@ jobs:
         cp HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
         cp html\*.* artifacts
         cp install.txt artifacts\install.txt
-        Set-Variable -Name release_version -Value (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-')
+        $release_version = (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-')
         echo "release_version=$release_version"
         echo "release_version=$release_version" >> $env:GITHUB_ENV
     
