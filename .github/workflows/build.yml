@@ -29,6 +29,11 @@ jobs:
         $assemblyversion_line = ($assemblyinfo | Select-String -Pattern "^\[assembly: AssemblyVersion").Line
         $new_version_line = '[assembly: AssemblyVersion("' + $assemblyversion_line.split('"')[1].split('.')[0] + '.' + (Get-Date -UFormat "%y.%V") + '.' + ($env:GITHUB_RUN_NUMBER % 100) + '")]'
         $assemblyinfo.Replace($assemblyversion_line, $new_version_line) | Set-Content -Path .\HSPI_IRobot\Properties\AssemblyInfo.cs -Encoding utf8
+        
+        $assemblyinfo = Get-Content -Path .\IRobotLANClient\Properties\AssemblyInfo.cs
+        $assemblyversion_line = ($assemblyinfo | Select-String -Pattern "^\[assembly: AssemblyVersion").Line
+        $new_version_line = '[assembly: AssemblyVersion("' + $assemblyversion_line.split('"')[1].split('.')[0] + '.' + (Get-Date -UFormat "%y.%V") + '.' + ($env:GITHUB_RUN_NUMBER % 100) + '")]'
+        $assemblyinfo.Replace($assemblyversion_line, $new_version_line) | Set-Content -Path .\IRobotLANClient\Properties\AssemblyInfo.cs -Encoding utf8
       
     - name: MSBuild
       run: |
