@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using HomeSeer.Jui.Views;
@@ -29,7 +31,18 @@ namespace HSPI_IRobot {
 		private AnalyticsClient _analyticsClient;
 
 		protected override void Initialize() {
-			WriteLog(ELogType.Debug, "Initializing");
+			string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(Robot)).Location).FileVersion;
+			
+#if DEBUG
+			WriteLog(ELogType.Info, $"Plugin version {pluginVersion} starting with client version {irobotClientVersion}");
+#else
+			if (pluginVersion != irobotClientVersion) {
+				WriteLog(ELogType.Warning, $"Running plugin version is {pluginVersion} but IRobotLANClient.dll version is {irobotClientVersion}");
+			} else {
+				WriteLog(ELogType.Info, $"Starting iRobot plugin version {pluginVersion}");
+			}
+#endif
 			
 			_analyticsClient = new AnalyticsClient(this, HomeSeerSystem);
 			
