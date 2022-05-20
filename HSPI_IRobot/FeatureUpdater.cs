@@ -50,7 +50,12 @@ namespace HSPI_IRobot {
 			switch (featureVersion) {
 				case 1:
 					_plugin.WriteLog(ELogType.Info, $"Updating feature {feature.Ref} (Battery) to version 2");
-					feature.DisplayType = EFeatureDisplayType.Normal;
+
+					HSPI.HsVersion hsVersion = _plugin.GetHsVersion();
+					if (hsVersion.Major >= 4 && hsVersion.Minor >= 2) {
+						feature.DisplayType = EFeatureDisplayType.Normal;
+					}
+
 					feature.TypeInfo = new TypeInfo {ApiType = EApiType.Feature, Type = (int) EDeviceType.Generic, SubType = (int) EGenericFeatureSubType.Battery};
 					feature.AddMiscFlag(EMiscFlag.StatusOnly);
 					_plugin.GetHsController().UpdateFeatureByRef(feature.Ref, feature.Changes);

@@ -607,6 +607,16 @@ namespace HSPI_IRobot {
 			return HomeSeerSystem;
 		}
 
+		public HsVersion GetHsVersion() {
+			string[] versionParts = HomeSeerSystem.Version().Split('.');
+			return new HsVersion {
+				Major = int.Parse(versionParts[0]),
+				Minor = int.Parse(versionParts[1]),
+				Patch = int.Parse(versionParts[2]),
+				Build = int.Parse(versionParts[3])
+			};
+		}
+
 		public void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {
 #if DEBUG
 			bool isDebugMode = true;
@@ -631,6 +641,13 @@ namespace HSPI_IRobot {
 			}
 			
 			HomeSeerSystem.WriteLog(logType, message, Name);
+		}
+
+		public struct HsVersion {
+			public int Major;
+			public int Minor;
+			public int Patch;
+			public int Build;
 		}
 	}
 }

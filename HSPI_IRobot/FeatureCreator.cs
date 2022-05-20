@@ -51,7 +51,6 @@ namespace HSPI_IRobot {
 				.WithName("Status")
 				.WithAddress($"{_device.Address}:Status")
 				.WithExtraData(_versionExtraData(1))
-				.WithDisplayType(EFeatureDisplayType.Important)
 				.AddGraphicForValue("/images/HomeSeer/status/off.gif", (double) RobotStatus.OnBase, "On Home Base")
 				.AddGraphicForValue("/images/HomeSeer/status/on.gif", (double) RobotStatus.Clean, "Cleaning")
 				.AddGraphicForValue("/images/HomeSeer/status/pause.png", (double) RobotStatus.JobPaused, "Job Paused")
@@ -66,6 +65,12 @@ namespace HSPI_IRobot {
 				.AddButton((double) RobotStatus.OffBaseNoJob, "Abort Job")
 				.AddButton((double) RobotStatus.DockManually, "Return To Home Base")
 				.AddButton((double) RobotStatus.Find, "Locate");
+
+			HSPI.HsVersion hsVersion = _plugin.GetHsVersion();
+			if (hsVersion.Major >= 4 && hsVersion.Minor >= 2) {
+				// This is only supported from 4.2.0.0 onward
+				factory.WithDisplayType(EFeatureDisplayType.Important);
+			}
 
 			return _createFeature(factory);
 		}
