@@ -57,6 +57,7 @@
         <Compile Include="Enums\FeatureType.cs" />
         <Compile Include="Enums\InternalError.cs" />
         <Compile Include="Enums\RobotStatus.cs" />
+        <Compile Include="FeatureCreator.cs" />
         <Compile Include="FeatureUpdater.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />

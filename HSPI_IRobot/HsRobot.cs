@@ -253,6 +253,11 @@ namespace HSPI_IRobot {
 			}
 
 			HsFeature feature = _plugin.GetHsController().GetFeatureByAddress($"{Blid}:{type}");
+			if (feature == null) {
+				_plugin.WriteLog(ELogType.Warning, $"Missing feature {type} for robot {Blid}; creating it");
+				FeatureCreator creator = new FeatureCreator(_plugin, HsDevice);
+				feature = _plugin.GetHsController().GetFeatureByRef(creator.CreateFeature(type));
+			}
 			_features.Add(type, feature);
 
 			FeatureUpdater updater = new FeatureUpdater(_plugin);
