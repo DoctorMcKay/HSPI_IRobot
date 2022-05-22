@@ -123,6 +123,10 @@ namespace IRobotLANClient {
 			SendCommand("start");
 		}
 
+		public void CleanCustom(JObject command) {
+			SendCommand("start", command);
+		}
+
 		public void Stop() {
 			SendCommand("stop");
 		}
@@ -147,18 +151,17 @@ namespace IRobotLANClient {
 			SendCommand("train");
 		}
 
-		protected async void SendCommand(string command) {
+		protected async void SendCommand(string command, JObject commandParams = null) {
 			DateTime unixEpoch = new DateTime(1970, 1, 1);
 
-			string payload = JsonConvert.SerializeObject(new {
-				command,
-				time = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds,
-				initiator = "localApp"
-			});
+			JObject cmd = commandParams != null ? (JObject) commandParams.DeepClone() : new JObject();
+			cmd["command"] = command;
+			cmd["time"] = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds;
+			cmd["initiator"] = "localApp";
 
-			MqttApplicationMessage msg = new MqttApplicationMessage() {
+			MqttApplicationMessage msg = new MqttApplicationMessage {
 				Topic = "cmd",
-				Payload = Encoding.UTF8.GetBytes(payload)
+				Payload = Encoding.UTF8.GetBytes(cmd.ToString())
 			};
 
 			try {

@@ -24,7 +24,11 @@
     
             .irobot-table-body .btn-link {
                 padding: 0;
-                margin-right: 5px;
+                margin: 0 5px 0 0;
+            }
+            
+            .irobot-table-body .row:hover {
+                background-color: #f6f6f6;
             }
     
             #btn-cloudlogin {
@@ -70,7 +74,7 @@
             
             <div id="favorite-jobs-table-body" class="irobot-table-body"></div>
 
-            <div class="streakhs grey lighten-2">
+            <div class="streakhs grey lighten-2 mt-5">
                 Last Jobs Started
                 <button type="button" class="btn btn-link" id="btn-refresh-current-jobs">Refresh</button>
             </div>
@@ -91,12 +95,32 @@
                 let g_FavoriteJobs = null;
                 let g_CurrentJobs = null;
                 
-                $('#btn-refresh-favorite-jobs').click(refreshFavoriteJobs);
-                $('#btn-refresh-current-jobs').click(refreshCurrentJobs);
+                $('#btn-refresh-favorite-jobs').click(handleRefreshButton);
+                $('#btn-refresh-current-jobs').click(handleRefreshButton);
                 
                 // Page loaded
                 refreshFavoriteJobs();
                 refreshCurrentJobs();
+                
+                async function handleRefreshButton() {
+                    let $btn = $(this);
+                    $btn.attr('disabled', true);
+                    $btn.text('Refreshed');
+                    
+                    switch ($btn.prop('id')) {
+                        case 'btn-refresh-favorite-jobs':
+                            await refreshFavoriteJobs();
+                            break;
+                            
+                        case 'btn-refresh-current-jobs':
+                            await refreshCurrentJobs();
+                            break;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    $btn.attr('disabled', false);
+                    $btn.text('Refresh');
+                }
                 
                 async function refreshFavoriteJobs() {
                     let {favorites} = await ajaxCmd('getFavoriteJobs');
@@ -153,7 +177,7 @@
                     let $tableBody = $('#current-jobs-table-body');
                     $tableBody.html('');
                     robots.forEach((robot, idx) => {
-                        let {favoritable, description} = getJobDetails(robot.lastCommand);
+                        let {favoritable, description, hasJob} = getJobDetails(robot.lastCommand);
                         
                         if (idx > 0) {
                             $tableBody.append('<hr class="d-sm-none" />');
@@ -170,13 +194,15 @@
                         $row.append($col);
                         
                         $col = $('<div class="col-sm-3" />');
-                        let $btn = $('<button type="button" class="btn btn-link" />');
-                        $btn.text('Save as Favorite');
-                        $btn.prop('disabled', !favoritable);
-                        $btn.click(() => {
-                            // TODO
-                        });
-                        $col.append($btn);
+                        if (hasJob) {
+                            let $btn = $('<button type="button" class="btn btn-link" />');
+                            $btn.text(favoritable ? 'Save as Favorite' : 'Not Favoritable');
+                            $btn.prop('disabled', !favoritable);
+                            $btn.click(() => {
+                                // TODO
+                            });
+                            $col.append($btn);
+                        }
                         $row.append($col);
                         
                         $tableBody.append($row);
@@ -189,7 +215,8 @@
                     if (cmd.command != 'start') {
                         return {
                             favoritable: false,
-                            description: 'No job'
+                            description: 'No job',
+                            hasJob: false
                         };
                     }
                     
@@ -197,7 +224,8 @@
                     if (!keys.some(k => !['command', 'initiator', 'time'].includes(k))) {
                         return {
                             favoritable: false,
-                            description: 'Standard cleaning job'
+                            description: 'Standard cleaning job',
+                            hasJob: true
                         };
                     }
                     
@@ -207,7 +235,11 @@
                     }
 
                     if (cmd.regions && cmd.regions.length > 0) {
-                        commandDescriptors.push(`${cmd.regions.length} region${cmd.regions.length == 1 ? '' : 's'} (${cmd.ordered ? 'ordered' : 'unordered'})`);
+                        let descriptor = `${cmd.regions.length} region`;
+                        if (cmd.regions.length > 1) {
+                            descriptor += `s (${cmd.ordered ? 'ordered' : 'unordered'})`;
+                        }
+                        commandDescriptors.push(descriptor);
                     }
                     
                     if (cmd.params && cmd.params.team && cmd.params.team.team_id) {
@@ -216,7 +248,8 @@
                     
                     return {
                         favoritable: true,
-                        description: commandDescriptors.join(', ') || 'Custom cleaning job'
+                        description: commandDescriptors.join(', ') || 'Custom cleaning job',
+                        hasJob: true
                     };
                 }
             })();

@@ -29,7 +29,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 		private string _getFavoriteJobs() {
 			List<object> favorites = new List<object>();
 			foreach (HsRobot robot in HSPI.Instance.HsRobots) {
-				favorites.AddRange(_getFavoriteJobsJson(robot).Select(favJob => new {
+				favorites.AddRange(robot.GetFavoriteJobs().Select(favJob => new {
 					blid = robot.Blid,
 					robotName = robot.GetName(),
 					job = favJob
@@ -38,12 +38,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			
 			return JsonConvert.SerializeObject(new {favorites});
 		}
-
-		private JArray _getFavoriteJobsJson(HsRobot robot) {
-			PlugExtraData extraData = (PlugExtraData) HSPI.Instance.GetHsController().GetPropertyByRef(robot.HsDevice.Ref, EProperty.PlugExtraData);
-			return !extraData.ContainsNamed("favoritejobs") ? new JArray() : JArray.Parse(extraData["favoritejobs"]);
-		}
-
+		
 		private string _saveJob(string blid, string name, JObject command) {
 			if (blid == null || string.IsNullOrWhiteSpace(name) || command == null) {
 				return BadCmdResponse;
@@ -58,10 +53,8 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				return ErrorResponse("Not a cleaning job");
 			}
 
-			JArray favorites = _getFavoriteJobsJson(robot);
-			foreach (JToken token in favorites) {
-				FavoriteJob favoriteJob = token.ToObject<FavoriteJob>();
-
+			List<FavoriteJob> favorites = robot.GetFavoriteJobs();
+			foreach (FavoriteJob favoriteJob in favorites) {
 				if (favoriteJob.Name == name.Trim()) {
 					return ErrorResponse("Job name is already in use for this robot");
 				}
@@ -79,20 +72,13 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				return ErrorResponse("Cannot save a standard cleaning job as a favorite");
 			}
 			
-			favorites.Add(JToken.FromObject(new FavoriteJob {
+			favorites.Add(new FavoriteJob {
 				Name = name.Trim(),
 				Timestamp = (long) DateTime.Now.Subtract(new DateTime(1970, 1, 1)).TotalSeconds,
 				Command = command
-			}));
-
-			PlugExtraData extraData = (PlugExtraData) HSPI.Instance.GetHsController().GetPropertyByRef(robot.HsDevice.Ref, EProperty.PlugExtraData);
-			if (!extraData.ContainsNamed("favoritejobs")) {
-				extraData.AddNamed("favoritejobs", favorites.ToString());
-			} else {
-				extraData["favoritejobs"] = favorites.ToString();
-			}
+			});
 			
-			HSPI.Instance.GetHsController().UpdatePropertyByRef(robot.HsDevice.Ref, EProperty.PlugExtraData, extraData);
+			robot.SaveFavoriteJobs(favorites);
 			return SuccessResponse;
 		}
 
@@ -106,26 +92,15 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				return ErrorResponse("Invalid blid");
 			}
 
-			JArray favorites = _getFavoriteJobsJson(robot);
-			JToken foundJob = null;
-			foreach (JToken token in favorites) {
-				FavoriteJob favoriteJob = token.ToObject<FavoriteJob>();
-				if (favoriteJob.Name == name.Trim()) {
-					foundJob = token;
-					break;
-				}
-			}
+			List<FavoriteJob> favorites = robot.GetFavoriteJobs();
+			int idx = favorites.FindIndex(job => job.Name == name);
 
-			if (foundJob == null) {
+			if (idx == -1) {
 				return ErrorResponse("No such job found");
 			}
 
-			favorites.Remove(foundJob);
-
-			PlugExtraData extraData = (PlugExtraData) HSPI.Instance.GetHsController().GetPropertyByRef(robot.HsDevice.Ref, EProperty.PlugExtraData);
-			extraData["favoritejobs"] = favorites.ToString();
-			HSPI.Instance.GetHsController().UpdatePropertyByRef(robot.HsDevice.Ref, EProperty.PlugExtraData, extraData);
-
+			favorites.RemoveAt(idx);
+			robot.SaveFavoriteJobs(favorites);
 			return SuccessResponse;
 		}
 

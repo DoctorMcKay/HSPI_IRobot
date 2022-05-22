@@ -2,13 +2,17 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.FeaturePageHandlers;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HsRobot {
@@ -293,6 +297,36 @@ namespace HSPI_IRobot {
 			
 			return new[] {RobotStatus.Clean, RobotStatus.DockManually, RobotStatus.Train}.Contains(cycle)
 			       && new[] {CleanJobPhase.Cleaning, CleanJobPhase.LowBatteryReturningToDock, CleanJobPhase.DoneReturningToDock}.Contains(phase);
+		}
+
+		public List<FavoriteJobs.FavoriteJob> GetFavoriteJobs() {
+			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
+			return !extraData.ContainsNamed("favoritejobs")
+				? new List<FavoriteJobs.FavoriteJob>()
+				: JArray.Parse(extraData["favoritejobs"]).Select(token => token.ToObject<FavoriteJobs.FavoriteJob>()).ToList();
+		}
+
+		public void SaveFavoriteJobs(List<FavoriteJobs.FavoriteJob> favorites) {
+			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
+			string serializedFavorites = JsonConvert.SerializeObject(favorites);
+			
+			if (!extraData.ContainsNamed("favoritejobs")) {
+				extraData.AddNamed("favoritejobs", serializedFavorites);
+			} else {
+				extraData["favoritejobs"] = serializedFavorites;
+			}
+			
+			_plugin.GetHsController().UpdatePropertyByRef(HsDevice.Ref, EProperty.PlugExtraData, extraData);
+		}
+
+		public bool StartFavoriteJob(string jobName) {
+			FavoriteJobs.FavoriteJob favorite = GetFavoriteJobs().Find(job => job.Name == jobName);
+			if (favorite.Equals(default(FavoriteJobs.FavoriteJob))) {
+				return false;
+			}
+			
+			Robot.CleanCustom(favorite.Command);
+			return true;
 		}
 
 		public enum HsRobotState {
