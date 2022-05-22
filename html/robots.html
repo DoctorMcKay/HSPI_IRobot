@@ -252,7 +252,7 @@
 				
 				// The page has just loaded. Get our robot list.
 				printRobotTable();
-				setInterval(printRobotTable, 5000);
+				setInterval(printRobotTable, 1000);
 				
 				async function printRobotTable() {
 					let {robots} = await ajaxCmd('getRobots');
@@ -397,7 +397,7 @@
 						if (result.error == 'Invalid cmd') {
 							// Login still in process
 							
-							if (Date.now() - startTime > 5000) {
+							if (Date.now() - startTime > 10000) {
 								complete('Login request timed out');
 							} else {
 								setTimeout(checkCloud, 500);
@@ -547,7 +547,13 @@
 						let robots = [];
 						
 						g_AutoDiscoveryInterval = setTimeout(async function discovery() {
-							let {discoveredRobots} = await ajaxCmd('autodiscoverResult');
+							let {error, discoveredRobots} = await ajaxCmd('autodiscoverResult');
+							if (error == 'Invalid cmd') {
+								// Nothing discovered yet
+								setTimeout(discovery, 500);
+								return;
+							}
+							
 							discoveredRobots.filter(r => !seenRobots[r.Blid]).forEach((robot) => {
 								seenRobots[robot.Blid] = true;
 								robots.push(robot);

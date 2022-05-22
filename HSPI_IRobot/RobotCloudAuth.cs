@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -24,7 +25,7 @@ namespace HSPI_IRobot {
 			LoginInProcess = false;
 		}
 
-		public async void Login() {
+		public async Task Login() {
 			LoginInProcess = true;
 			LoginError = null;
 			Robots = new List<RobotDetails>();

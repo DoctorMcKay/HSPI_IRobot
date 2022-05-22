@@ -58,6 +58,8 @@
         <Compile Include="Enums\InternalError.cs" />
         <Compile Include="Enums\RobotStatus.cs" />
         <Compile Include="FeatureCreator.cs" />
+        <Compile Include="FeaturePageHandlers\AbstractFeaturePageHandler.cs" />
+        <Compile Include="FeaturePageHandlers\ManageRobots.cs" />
         <Compile Include="FeatureUpdater.cs" />
         <Compile Include="HsEvents\RobotTrigger.cs" />
         <Compile Include="HSPI.cs" />

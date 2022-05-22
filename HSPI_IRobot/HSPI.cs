@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Timers;
 using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Devices;
@@ -12,6 +13,7 @@ using HomeSeer.PluginSdk.Devices.Controls;
 using HomeSeer.PluginSdk.Events;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.FeaturePageHandlers;
 using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
@@ -29,9 +31,6 @@ namespace HSPI_IRobot {
 		private bool _debugLogging;
 
 		internal List<HsRobot> HsRobots;
-		private RobotDiscovery _robotDiscovery;
-		private RobotCloudAuth _robotCloudAuth;
-		private string _addRobotResult;
 		private AnalyticsClient _analyticsClient;
 
 		public HSPI() {
@@ -385,7 +384,7 @@ namespace HSPI_IRobot {
 		}
 
 		public override string PostBackProc(string page, string data, string user, int userRights) {
-			WriteLog(ELogType.Trace, $"PostBackProc page name {page} by user {user} with rights {userRights}");
+			//WriteLog(ELogType.Trace, $"PostBackProc page name {page} by user {user} with rights {userRights}");
 			
 			if ((userRights & 2) != 2) {
 				return JsonConvert.SerializeObject(new {
@@ -393,175 +392,37 @@ namespace HSPI_IRobot {
 					fatal = true
 				});
 			}
-			
-			switch (page) {
-				case "robots.html":
-					return HandleRobotsPagePostBack(data);
 
-				default:
-					WriteLog(ELogType.Warning, $"Received PostBackProc for unknown page {page}");
-					break;
-			}
-
-			return "";
-		}
-
-		private string HandleRobotsPagePostBack(string data) {
-			JObject payload = JObject.Parse(data);
-			string cmd = (string) payload.SelectToken("cmd");
-			string badCmdResponse = JsonConvert.SerializeObject(new { error = "Invalid cmd" });
-			string successResponse = JsonConvert.SerializeObject(new { success = true });
-			if (cmd == null) {
-				return badCmdResponse;
-			}
-			
-			// Shared variables between multiple cases
-			string blid;
-			HsRobot robot;
-
-			switch (cmd) {
-				case "autodiscover":
-					_robotDiscovery = new RobotDiscovery();
-					_robotDiscovery.Discover();
-					return successResponse;
-				
-				case "autodiscoverResult":
-					return _robotDiscovery == null
-						? badCmdResponse 
-						: JsonConvert.SerializeObject(new { discoveredRobots = _robotDiscovery.DiscoveredRobots });
-
-				case "addRobot":
-					string ip = (string) payload.SelectToken("ip");
-					blid = (string) payload.SelectToken("blid");
-					string password = (string) payload.SelectToken("password");
-
-					if (HsRobots.Exists(robo => robo.Blid == blid)) {
-						return JsonConvert.SerializeObject(new { error = "Robot already exists" });
-					}
-					
-					_addNewRobot(ip, blid, password);
-					return successResponse;
-				
-				case "addRobotResult":
-					switch (_addRobotResult) {
-						case null:
-							return badCmdResponse;
-						
-						case "OK":
-							return successResponse;
-						
-						default:
-							return JsonConvert.SerializeObject(new { error = _addRobotResult });
-					}
-
-				case "getRobots":
-					object[] robots = new object[HsRobots.Count];
-					for (int i = 0; i < HsRobots.Count; i++) {
-						robots[i] = new {
-							blid = HsRobots[i].Blid,
-							password = HsRobots[i].Password,
-							stateString = HsRobots[i].StateString,
-							ip = HsRobots[i].ConnectedIp,
-							type = HsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
-							name = HsRobots[i].GetName(),
-							sku = HsRobots[i].Robot?.Sku ?? "unknown"
-						};
-					}
-					
-					return JsonConvert.SerializeObject(new { robots });
-				
-				case "getRobotFullStatus":
-					blid = (string) payload.SelectToken("blid");
-					if (blid == null) {
-						return badCmdResponse;
-					}
-
-					robot = HsRobots.Find(bot => bot.Blid == blid);
-					return robot == null
-						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
-						: JsonConvert.SerializeObject(new { status = robot.Robot?.ReportedState });
-				
-				case "cloudLogin":
-					string cloudUsername = (string) payload.SelectToken("username");
-					string cloudPassword = (string) payload.SelectToken("password");
-					if (cloudUsername == null || cloudPassword == null) {
-						return badCmdResponse;
-					}
-
-					_robotCloudAuth = new RobotCloudAuth(cloudUsername, cloudPassword);
-					_robotCloudAuth.Login();
-					return successResponse;
-				
-				case "cloudLoginResult":
-					if (_robotCloudAuth == null || _robotCloudAuth.LoginInProcess) {
-						return badCmdResponse;
-					}
-
-					if (_robotCloudAuth.LoginError != null) {
-						return JsonConvert.SerializeObject(new {
-							error = _robotCloudAuth.LoginError.Message
-						});
-					}
-
-					return JsonConvert.SerializeObject(new {
-						robots = _robotCloudAuth.Robots
-					});
-				
-				case "deleteRobot":
-					blid = (string) payload.SelectToken("blid");
-
-					robot = HsRobots.Find(r => r.Blid == blid);
-					if (robot == null) {
-						return badCmdResponse;
-					}
-					
-					robot.Disconnect();
-					HsRobots.Remove(robot);
-
-					HsDevice device = HomeSeerSystem.GetDeviceByAddress(blid);
-					HomeSeerSystem.DeleteDevice(device.Ref);
-					return successResponse;
-				
-				case "debugReport":
-					// We're going to do this synchronously because it shouldn't happen often
-					Task<AnalyticsClient.DebugReportResponse> reportTask = _analyticsClient.DebugReport(new { Robots = HsRobots });
-					reportTask.Wait();
-					AnalyticsClient.DebugReportResponse response = reportTask.Result;
-					return response.Success
-						? JsonConvert.SerializeObject(new { report_id = response.Message })
-						: JsonConvert.SerializeObject(new { error = response.Message });
-
-				default:
-					return badCmdResponse;
+			try {
+				AbstractFeaturePageHandler handler = AbstractFeaturePageHandler.GetHandler(page);
+				return handler.PostBackProc(data);
+			} catch (Exception ex) {
+				WriteLog(ELogType.Warning, $"PostBackProc error for page {page}: {ex.Message}");
+				return ex.Message;
 			}
 		}
 
-		private async void _addNewRobot(string ip, string blid, string password) {
-			_addRobotResult = null;
-			
+		public async Task<string> AddNewRobot(string ip, string blid, string password) {
 			// First things first, let's try to connect and see if we can
 			try {
 				RobotVerifier verifier = new RobotVerifier(ip, blid, password);
 				await verifier.Connect();
+				RobotType robotType = await verifier.WaitForDetectedType();
+				await verifier.Disconnect();
 
-				verifier.OnStateUpdated += async (src, arg) => {
-					await verifier.Disconnect();
-					
-					if (verifier.DetectedType == RobotType.Unrecognized) {
-						WriteLog(ELogType.Debug, "Unrecognized robot type");
-						WriteLog(ELogType.Debug, verifier.ReportedState.ToString());
-						_addRobotResult = "Unrecognized robot type";
-						return;
-					}
-					
-					// Successfully connected and recognized robot type
-					_addRobotResult = "OK";
-					await Task.Delay(1000);
-					_createNewRobotDevice(ip, blid, password, verifier);
-				};
+				if (robotType == RobotType.Unrecognized) {
+					WriteLog(ELogType.Debug, "Unrecognized robot type");
+					WriteLog(ELogType.Debug, verifier.ReportedState.ToString());
+					return "Unrecognized robot type";
+				}
+
+				Timer timer = new Timer {AutoReset = false, Enabled = true, Interval = 1000};
+				timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
+
+				return "OK";
 			} catch (Exception ex) {
 				// Failed to connect
-				_addRobotResult = ex.Message;
+				return ex.Message;
 			}
 		}
 
@@ -618,6 +479,10 @@ namespace HSPI_IRobot {
 			}
 
 			await InitializeDevice(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
+		}
+
+		public AnalyticsClient GetAnalyticsClient() {
+			return _analyticsClient;
 		}
 
 		public IHsController GetHsController() {
