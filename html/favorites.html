@@ -1,0 +1,225 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <!--This maintains the scale of the page based on the scale of the screen-->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="author" content="HomeSeer Technologies">
+        <!--This liquid tag loads all of the necessary css files for HomeSeer-->
+        {{includefile '/bootstrap/css/page_common.css'}}
+        <title>iRobot - Favorite Jobs</title>
+    
+        <style>
+            .streakhs .btn-link {
+                margin-top: 0;
+                margin-bottom: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+            
+            .irobot-table-header>div {
+                font-weight: 900;
+            }
+    
+            .irobot-table-body .btn-link {
+                padding: 0;
+                margin-right: 5px;
+            }
+    
+            #btn-cloudlogin {
+                position: absolute;
+                bottom: 0;
+            }
+    
+            #robotInfoModal .modal-body dd {
+                font-family: monospace;
+            }
+    
+            #robot-full-status {
+                font-family: monospace;
+                font-size: 12px;
+                width: 100%;
+                height: 300px;
+            }
+    
+            .add-robot-help {
+                padding: 5px;
+                border-radius: 5px;
+            }
+        </style>
+    </head>
+    <body class="body homeseer-skin">
+        <!--These liquid tags add the HomeSeer header and navbar to the top of the page when appropriate-->
+        {{includefile 'header.html'}}
+        {{includefile 'navbar.html'}}
+        <!--Primary container for the page content
+            The .container class ensures the page content is fit and centered to the screen-->
+        <div class="container">
+            <div class="streakhs grey lighten-2">
+                Favorite Jobs
+                <button type="button" class="btn btn-link" id="btn-refresh-favorite-jobs">Refresh</button>
+            </div>
+
+            <div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
+                <div class="col-3">Job Name</div>
+                <div class="col-3">Robot</div>
+                <div class="col-3">Description</div>
+                <div class="col-3">Actions</div>
+            </div>
+            
+            <div id="favorite-jobs-table-body" class="irobot-table-body"></div>
+
+            <div class="streakhs grey lighten-2">
+                Last Jobs Started
+                <button type="button" class="btn btn-link" id="btn-refresh-current-jobs">Refresh</button>
+            </div>
+
+            <div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
+                <div class="col-3">Robot</div>
+                <div class="col-6">Job Description</div>
+                <div class="col-3">Actions</div>
+            </div>
+
+            <div id="current-jobs-table-body" class="irobot-table-body"></div>
+        </div>
+        
+        {{includefile 'bootstrap/js/page_common.js'}}
+        <script src="/iRobot/common.js"></script>
+        <script>
+            (async function() {
+                let g_FavoriteJobs = null;
+                let g_CurrentJobs = null;
+                
+                $('#btn-refresh-favorite-jobs').click(refreshFavoriteJobs);
+                $('#btn-refresh-current-jobs').click(refreshCurrentJobs);
+                
+                // Page loaded
+                refreshFavoriteJobs();
+                refreshCurrentJobs();
+                
+                async function refreshFavoriteJobs() {
+                    let {favorites} = await ajaxCmd('getFavoriteJobs');
+                    if (isObjectIdentical(favorites, g_FavoriteJobs)) {
+                        return;
+                    }
+                    
+                    g_FavoriteJobs = favorites;
+                    
+                    let $tableBody = $('#favorite-jobs-table-body');
+                    $tableBody.html('');
+                    if (favorites.length == 0) {
+                        let $row = $('<div class="row no-gutters" />');
+                        let $col = $('<div class="col-12" />');
+                        $col.text('You have no favorite jobs. To save a favorite job, start a new job on one of your robots, then refresh the Last Jobs Started section.');
+                        $row.append($col);
+                        $tableBody.append($row);
+                        return;
+                    }
+                    
+                    favorites.forEach(({blid, robotName, job: {name, timestamp, command}}, idx) => {
+                        let {description} = getJobDetails(command);
+                        
+                        if (idx > 0) {
+                            $tableBody.append('<hr class="d-sm-none" />');
+                        }
+                        
+                        let $row = $div('row no-gutters');
+                        textCol($row, 'col-sm-3', name);
+                        textCol($row, 'col-sm-3', robotName);
+                        textCol($row, 'col-sm-3', description);
+                        
+                        let $col = $div('col-sm-3');
+                        let $btn = $('<button type="button" class="btn btn-link" />');
+                        $btn.text('Delete');
+                        $btn.click(() => {
+                            // TODO
+                        });
+                        $col.append($btn);
+                        $row.append($col);
+                        
+                        $tableBody.append($row);
+                    });
+                }
+                
+                async function refreshCurrentJobs() {
+                    let {robots} = await ajaxCmd('getLastCommands');
+                    if (isObjectIdentical(robots, g_CurrentJobs)) {
+                        return;
+                    }
+                    
+                    g_CurrentJobs = robots;
+                    
+                    let $tableBody = $('#current-jobs-table-body');
+                    $tableBody.html('');
+                    robots.forEach((robot, idx) => {
+                        let {favoritable, description} = getJobDetails(robot.lastCommand);
+                        
+                        if (idx > 0) {
+                            $tableBody.append('<hr class="d-sm-none" />');
+                        }
+                        
+                        let $row = $('<div class="row no-gutters" />');
+                        
+                        let $col = $('<div class="col-sm-3" />');
+                        $col.text(robot.name);
+                        $row.append($col);
+                        
+                        $col = $('<div class="col-sm-6" />');
+                        $col.text(description);
+                        $row.append($col);
+                        
+                        $col = $('<div class="col-sm-3" />');
+                        let $btn = $('<button type="button" class="btn btn-link" />');
+                        $btn.text('Save as Favorite');
+                        $btn.prop('disabled', !favoritable);
+                        $btn.click(() => {
+                            // TODO
+                        });
+                        $col.append($btn);
+                        $row.append($col);
+                        
+                        $tableBody.append($row);
+                    });
+                }
+                
+                function getJobDetails(cmd) {
+                    cmd = cmd || {};
+                    
+                    if (cmd.command != 'start') {
+                        return {
+                            favoritable: false,
+                            description: 'No job'
+                        };
+                    }
+                    
+                    let keys = Object.keys(cmd).filter(k => cmd[k] !== null);
+                    if (!keys.some(k => !['command', 'initiator', 'time'].includes(k))) {
+                        return {
+                            favoritable: false,
+                            description: 'Standard cleaning job'
+                        };
+                    }
+                    
+                    let commandDescriptors = [];
+                    if (cmd.params && cmd.params.timebox) {
+                        commandDescriptors.push(`${cmd.params.timebox} minute time limit`);
+                    }
+
+                    if (cmd.regions && cmd.regions.length > 0) {
+                        commandDescriptors.push(`${cmd.regions.length} region${cmd.regions.length == 1 ? '' : 's'} (${cmd.ordered ? 'ordered' : 'unordered'})`);
+                    }
+                    
+                    if (cmd.params && cmd.params.team && cmd.params.team.team_id) {
+                        commandDescriptors.push('Imprint Link teaming');
+                    }
+                    
+                    return {
+                        favoritable: true,
+                        description: commandDescriptors.join(', ') || 'Custom cleaning job'
+                    };
+                }
+            })();
+        </script>
+    </body>
+</html>

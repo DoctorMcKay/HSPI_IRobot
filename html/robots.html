@@ -51,7 +51,7 @@
 		<div class="container">
 			<div class="streakhs grey lighten-2">Robots</div>
 			
-			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header robots-table-header d-none d-sm-flex">
+			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 				<div class="col-3">Name</div>
 				<div class="col-3">Address</div>
 				<div class="col-3">Status</div>
@@ -64,7 +64,7 @@
 			<div class="streakhs grey lighten-2">Other Robots on Network</div>
 			
 			<div id="discovered-robots-table-outer" style="display: none">
-				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header discovered-robots-table-header d-none d-sm-flex">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 					<div class="col-3">Name</div>
 					<div class="col-3">Address</div>
 					<div class="col-3">Model</div>
@@ -103,7 +103,7 @@
 			<p id="cloud-login-error" class="hs-bg-red-4 p-1" style="display: none"></p>
 			
 			<div id="cloud-robots-table-outer" style="display: none">
-				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header cloud-robots-table-header d-none d-sm-flex">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 					<div class="col-3">Name</div>
 					<div class="col-3">Address</div>
 					<div class="col-3">Model</div>
@@ -220,24 +220,7 @@
 		</div>
 		
 		{{includefile 'bootstrap/js/page_common.js'}}
-		<script>
-			function fatalPageError(message) {
-				let $div = $('<div class="card mt-2" />');
-				$('.container').html($div);
-				
-				let $div2 = $('<div class="row" />');
-				$div.html($div2);
-				
-				$div = $div2;
-				$div2 = $('<div class="col text-center" />');
-				$div2.text(message);
-				$div.html($div2);
-			}
-			
-			if (!window.Promise) {
-				fatalPageError('Your browser is too old to use this page. Please use a modern browser.');
-			}
-		</script>
+		<script src="/iRobot/common.js"></script>
 		<script>
 			(async function() {
 				let g_AutoDiscoveryInterval = null;
@@ -595,92 +578,6 @@
 							}
 						});
 					});
-				}
-				
-				function ajaxCmd(cmd, body) {
-					body = body || {};
-					body.cmd = cmd;
-					
-					return new Promise((resolve, reject) => {
-						let xhr = new XMLHttpRequest();
-						xhr.open('POST', '/iRobot/robots.html');
-						xhr.setRequestHeader('Content-Type', 'application/json');
-						xhr.send(JSON.stringify(body));
-						
-						xhr.addEventListener('readystatechange', function() {
-							if (xhr.readyState != XMLHttpRequest.DONE) {
-								return;
-							}
-							
-							if (xhr.status != 200) {
-								return reject(new Error('HTTP error ' + xhr.status));
-							}
-							
-							let response = JSON.parse(xhr.responseText);
-							if (response.error && response.fatal) {
-								fatalPageError(response.error);
-								return;
-							}
-							
-							resolve(response);
-						});
-					});
-				}
-				
-				function confirmModal(content, buttonText = 'OK') {
-					return new Promise((resolve) => {
-						if (!Array.isArray(content)) {
-							content = [content];
-						}
-						
-						let $confirmBody = $('#confirm-modal-body');
-						let $confirmBtn = $('#btn-confirmmodalconfirm');
-						let $modal = $('#confirmModal');
-						
-						$confirmBtn.text(buttonText);
-						
-						$confirmBody.html('');
-						content.forEach((paragraph) => {
-							let $p = $('<p />');
-							$p.html(paragraph);
-							$confirmBody.append($p);
-						});
-						
-						let modalHide = () => {
-							resolve({confirmed: false});
-							$modal.off('hide.bs.modal', modalHide);
-							$confirmBtn.off('click', modalConfirm);
-						};
-						
-						let modalConfirm = () => {
-							resolve({confirmed: true});
-							$modal.off('hide.bs.modal', modalHide);
-							$confirmBtn.off('click', modalConfirm);
-							$modal.modal('hide');
-						};
-						
-						$modal.modal();
-						$modal.on('hide.bs.modal', modalHide);
-						$confirmBtn.on('click', modalConfirm);
-					});
-				}
-				
-				function isObjectIdentical(a, b) {
-					return serializeObject(a) === serializeObject(b);
-					
-					function serializeObject(obj) {
-						if (obj === null) {
-							return 'NULL';
-						}
-						
-						if (typeof obj == 'object') {
-							let keys = Object.keys(obj);
-							keys.sort();
-							return '{' + keys.map(k => `${k}=${serializeObject(obj[k])}`).join(',') + '}';
-						}
-						
-						return obj.toString();
-					}
 				}
 			})();
 		</script>

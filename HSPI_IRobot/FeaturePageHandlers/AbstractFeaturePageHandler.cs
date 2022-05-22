@@ -20,6 +20,10 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 					case "robots.html":
 						Handlers.Add(page, new ManageRobots());
 						break;
+					
+					case "favorites.html":
+						Handlers.Add(page, new FavoriteJobs());
+						break;
 
 					default:
 						throw new Exception($"Unknown page {page}");

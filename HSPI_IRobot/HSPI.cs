@@ -72,6 +72,7 @@ namespace HSPI_IRobot {
 			Settings.Add(settingsPageFactory.Page);
 			
 			HomeSeerSystem.RegisterDeviceIncPage(Id, "robots.html", "Manage Robots");
+			HomeSeerSystem.RegisterFeaturePage(Id, "favorites.html", "Favorite Jobs");
 			
 			// Initialize our device list
 			InitializeDeviceList();
