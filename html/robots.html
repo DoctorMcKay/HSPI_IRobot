@@ -274,6 +274,11 @@
 				
 				async function printRobotTable() {
 					let {robots} = await ajaxCmd('getRobots');
+					if (isObjectIdentical(robots, g_ActiveRobots)) {
+						return;
+					}
+					
+					console.log('Robot list changed');
 					g_ActiveRobots = robots;
 					
 					let $tableBody = $('#robots-table-body');
@@ -657,6 +662,24 @@
 						$modal.on('hide.bs.modal', modalHide);
 						$confirmBtn.on('click', modalConfirm);
 					});
+				}
+				
+				function isObjectIdentical(a, b) {
+					return serializeObject(a) === serializeObject(b);
+					
+					function serializeObject(obj) {
+						if (obj === null) {
+							return 'NULL';
+						}
+						
+						if (typeof obj == 'object') {
+							let keys = Object.keys(obj);
+							keys.sort();
+							return '{' + keys.map(k => `${k}=${serializeObject(obj[k])}`).join(',') + '}';
+						}
+						
+						return obj.toString();
+					}
 				}
 			})();
 		</script>
