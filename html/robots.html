@@ -190,11 +190,29 @@
 						</div>
 					</div>
 					
-					<p id="add-robot-error" class="hs-bg-red-4 p-1" style="display: none"></i>
+					<p id="add-robot-error" class="hs-bg-red-4 p-1" style="display: none"></p>
 					
 					<div class="modal-footer">
 						<button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
 						<button id="btn-addrobot" type="button" class="btn btn-success">Add</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	
+		<!-- Generic confirm modal -->
+		<div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">Confirm</h4>
+					</div>
+					
+					<div class="modal-body" id="confirm-modal-body"></div>
+					
+					<div class="modal-footer">
+						<button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
+						<button id="btn-confirmmodalconfirm" type="button" class="btn btn-danger"></button>
 					</div>
 				</div>
 			</div>
@@ -239,7 +257,7 @@
 					$('#robot-full-status').val(JSON.stringify(status, undefined, '\t')).show();
 				});
 				$('#btn-debugreport').click(async function() {
-					let confirmed = confirm('Send a debug report? This will send all of your robots\' data to the plugin author.');
+					let {confirmed} = await confirmModal('Send a debug report? This will send all of your robots\' data to the plugin author.', 'Send Debug Report');
 					if (!confirmed) {
 						return;
 					}
@@ -298,7 +316,10 @@
 						
 						$btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(async () => {
-							let confirmed = confirm(`Are you sure you want to delete "${robot.name}"? All HS devices associated with this robot will be deleted and cannot be recovered.`);
+							let {confirmed} = await confirmModal([
+								`Are you sure you want to delete <b>${robot.name}</b>?`,
+								'All HomeSeer devices associated with this robot will be deleted and cannot be recovered.'
+							], 'Delete Robot');
 							if (!confirmed) {
 								return;
 							}
@@ -597,6 +618,44 @@
 							
 							resolve(response);
 						});
+					});
+				}
+				
+				function confirmModal(content, buttonText = 'OK') {
+					return new Promise((resolve) => {
+						if (!Array.isArray(content)) {
+							content = [content];
+						}
+						
+						let $confirmBody = $('#confirm-modal-body');
+						let $confirmBtn = $('#btn-confirmmodalconfirm');
+						let $modal = $('#confirmModal');
+						
+						$confirmBtn.text(buttonText);
+						
+						$confirmBody.html('');
+						content.forEach((paragraph) => {
+							let $p = $('<p />');
+							$p.html(paragraph);
+							$confirmBody.append($p);
+						});
+						
+						let modalHide = () => {
+							resolve({confirmed: false});
+							$modal.off('hide.bs.modal', modalHide);
+							$confirmBtn.off('click', modalConfirm);
+						};
+						
+						let modalConfirm = () => {
+							resolve({confirmed: true});
+							$modal.off('hide.bs.modal', modalHide);
+							$confirmBtn.off('click', modalConfirm);
+							$modal.modal('hide');
+						};
+						
+						$modal.modal();
+						$modal.on('hide.bs.modal', modalHide);
+						$confirmBtn.on('click', modalConfirm);
 					});
 				}
 			})();
