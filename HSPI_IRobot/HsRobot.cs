@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Timers;
 using HomeSeer.PluginSdk.Devices;
@@ -33,8 +35,8 @@ namespace HSPI_IRobot {
 		public event EventHandler OnConnectStateUpdated;
 		public event EventHandler OnRobotStatusUpdated;
 
-		public HsRobot(HSPI plugin, HsDevice hsDevice) {
-			_plugin = plugin;
+		public HsRobot(HsDevice hsDevice) {
+			_plugin = HSPI.Instance;
 			HsDevice = hsDevice;
 			Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
 			Blid = HsDevice.PlugExtraData["blid"];
@@ -255,12 +257,12 @@ namespace HSPI_IRobot {
 			HsFeature feature = _plugin.GetHsController().GetFeatureByAddress($"{Blid}:{type}");
 			if (feature == null) {
 				_plugin.WriteLog(ELogType.Warning, $"Missing feature {type} for robot {Blid}; creating it");
-				FeatureCreator creator = new FeatureCreator(_plugin, HsDevice);
+				FeatureCreator creator = new FeatureCreator(HsDevice);
 				feature = _plugin.GetHsController().GetFeatureByRef(creator.CreateFeature(type));
 			}
 			_features.Add(type, feature);
 
-			FeatureUpdater updater = new FeatureUpdater(_plugin);
+			FeatureUpdater updater = new FeatureUpdater();
 			updater.ExecuteFeatureUpdates(feature);
 			
 			return feature;

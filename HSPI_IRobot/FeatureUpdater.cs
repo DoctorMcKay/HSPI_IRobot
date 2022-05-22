@@ -8,8 +8,8 @@ namespace HSPI_IRobot {
 	public class FeatureUpdater {
 		private readonly HSPI _plugin;
 
-		public FeatureUpdater(HSPI plugin) {
-			_plugin = plugin;
+		public FeatureUpdater() {
+			_plugin = HSPI.Instance;
 		}
 		
 		public void ExecuteFeatureUpdates(HsFeature feature) {

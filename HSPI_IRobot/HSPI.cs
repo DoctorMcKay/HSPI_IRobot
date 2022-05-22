@@ -19,6 +19,8 @@ using Newtonsoft.Json.Linq;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
+		public static HSPI Instance { get; private set; }
+		
 		public const string PluginId = "iRobot";
 		public override string Name { get; } = "iRobot";
 		public override string Id { get; } = PluginId;
@@ -30,6 +32,10 @@ namespace HSPI_IRobot {
 		private RobotCloudAuth _robotCloudAuth;
 		private string _addRobotResult;
 		private AnalyticsClient _analyticsClient;
+
+		public HSPI() {
+			Instance = this;
+		}
 
 		protected override void Initialize() {
 			string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
@@ -465,7 +471,7 @@ namespace HSPI_IRobot {
 						return badCmdResponse;
 					}
 
-					_robotCloudAuth = new RobotCloudAuth(this, cloudUsername, cloudPassword);
+					_robotCloudAuth = new RobotCloudAuth(cloudUsername, cloudPassword);
 					_robotCloudAuth.Login();
 					return successResponse;
 				
@@ -558,7 +564,7 @@ namespace HSPI_IRobot {
 			int newDeviceRef = HomeSeerSystem.CreateDevice(factory.PrepareForHs());
 			WriteLog(ELogType.Info, $"Created new device {newDeviceRef} for {verifier.DetectedType} robot {verifier.Name} ({blid})");
 
-			FeatureCreator featureCreator = new FeatureCreator(this, HomeSeerSystem.GetDeviceByRef(newDeviceRef));
+			FeatureCreator featureCreator = new FeatureCreator(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
 			featureCreator.CreateFeature(FeatureType.Status);
 			featureCreator.CreateFeature(FeatureType.JobPhase);
 			featureCreator.CreateFeature(FeatureType.Battery);
@@ -595,12 +601,6 @@ namespace HSPI_IRobot {
 			}
 
 			await InitializeDevice(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
-		}
-
-		private PlugExtraData _versionExtraData(int version) {
-			PlugExtraData data = new PlugExtraData();
-			data.AddNamed("version", version.ToString());
-			return data;
 		}
 
 		public IHsController GetHsController() {

@@ -16,8 +16,8 @@ namespace HSPI_IRobot {
 		private readonly string _username;
 		private readonly string _password;
 
-		public RobotCloudAuth(HSPI plugin, string username, string password) {
-			_plugin = plugin;
+		public RobotCloudAuth(string username, string password) {
+			_plugin = HSPI.Instance;
 			_username = username;
 			_password = password;
 
