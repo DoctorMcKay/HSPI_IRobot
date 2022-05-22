@@ -345,7 +345,7 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, $"{robot.GetName()} navigating status changed: {wasNavigating} -> {!wasNavigating}");
 				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
 					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
-					if (trigger.IsTriggerTrue(false)) {
+					if (trigger.ReferencesDeviceOrFeature(robot.HsDevice.Ref) && trigger.IsTriggerTrue(false)) {
 						HomeSeerSystem.TriggerFire(Id, trigActInfo);
 					}
 				}
