@@ -9,9 +9,10 @@ using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Devices.Controls;
-using HomeSeer.PluginSdk.Devices.Identification;
+using HomeSeer.PluginSdk.Events;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
 using Newtonsoft.Json;
@@ -27,7 +28,7 @@ namespace HSPI_IRobot {
 
 		private bool _debugLogging;
 
-		private List<HsRobot> _hsRobots;
+		internal List<HsRobot> HsRobots;
 		private RobotDiscovery _robotDiscovery;
 		private RobotCloudAuth _robotCloudAuth;
 		private string _addRobotResult;
@@ -76,24 +77,27 @@ namespace HSPI_IRobot {
 			// Initialize our device list
 			InitializeDeviceList();
 			
+			// Set up event triggers and actions
+			TriggerTypes.AddTriggerType(typeof(RobotTrigger));
+			
 			_analyticsClient.ReportIn(5000);
 		}
 
 		private async void InitializeDeviceList() {
-			_hsRobots = new List<HsRobot>();
+			HsRobots = new List<HsRobot>();
 
 			await Task.WhenAll(HomeSeerSystem.GetRefsByInterface(Id, true).Select(deviceRef => Task.Run(async () => {
 				await InitializeDevice(HomeSeerSystem.GetDeviceByRef(deviceRef));
 			})).ToList());
 
-			int countRobots = _hsRobots.Count;
-			int connectedRobots = _hsRobots.FindAll(robot => robot.State == HsRobot.HsRobotState.Connected).Count;
+			int countRobots = HsRobots.Count;
+			int connectedRobots = HsRobots.FindAll(robot => robot.State == HsRobot.HsRobotState.Connected).Count;
 			WriteLog(ELogType.Info, $"All devices initialized. Found {countRobots} robots and {connectedRobots} connected successfully");
 		}
 
 		private async Task InitializeDevice(HsDevice device) {
-			HsRobot robot = new HsRobot(this, device);
-			_hsRobots.Add(robot);
+			HsRobot robot = new HsRobot(device);
+			HsRobots.Add(robot);
 
 			robot.OnConnectStateUpdated += HandleRobotConnectionStateUpdate;
 			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
@@ -113,7 +117,7 @@ namespace HSPI_IRobot {
 			foreach (ControlEvent ctrl in colSend) {
 				HsFeature feature = HomeSeerSystem.GetFeatureByRef(ctrl.TargetRef);
 				string[] addressParts = feature.Address.Split(':');
-				HsRobot robot = _hsRobots.Find(r => r.Blid == addressParts[0]);
+				HsRobot robot = HsRobots.Find(r => r.Blid == addressParts[0]);
 				if (robot?.Robot == null) {
 					WriteLog(ELogType.Warning, $"Got SetIOMulti {ctrl.TargetRef} = {ctrl.ControlValue}, but no such robot found or not connected");
 					continue;
@@ -203,6 +207,8 @@ namespace HSPI_IRobot {
 		private void HandleRobotStatusUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
 			WriteLog(ELogType.Debug, $"Robot {robot.Robot.Name} updated: battery {robot.Robot.BatteryLevel}; cycle {robot.Robot.Cycle}; phase {robot.Robot.Phase}");
+
+			bool wasNavigating = robot.IsNavigating();
 
 			// Features common to all robot types
 			// Status
@@ -334,6 +340,17 @@ namespace HSPI_IRobot {
 					
 					break;
 			}
+			
+			// Did our navigating state change?
+			if (robot.IsNavigating() != wasNavigating) {
+				WriteLog(ELogType.Debug, $"{robot.GetName()} navigating status changed: {wasNavigating} -> {!wasNavigating}");
+				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
+					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
+					if (trigger.IsTriggerTrue(false)) {
+						HomeSeerSystem.TriggerFire(Id, trigActInfo);
+					}
+				}
+			}
 		}
 		
 		protected override void OnSettingsLoad() {
@@ -418,7 +435,7 @@ namespace HSPI_IRobot {
 					blid = (string) payload.SelectToken("blid");
 					string password = (string) payload.SelectToken("password");
 
-					if (_hsRobots.Exists(robo => robo.Blid == blid)) {
+					if (HsRobots.Exists(robo => robo.Blid == blid)) {
 						return JsonConvert.SerializeObject(new { error = "Robot already exists" });
 					}
 					
@@ -438,16 +455,16 @@ namespace HSPI_IRobot {
 					}
 
 				case "getRobots":
-					object[] robots = new object[_hsRobots.Count];
-					for (int i = 0; i < _hsRobots.Count; i++) {
+					object[] robots = new object[HsRobots.Count];
+					for (int i = 0; i < HsRobots.Count; i++) {
 						robots[i] = new {
-							blid = _hsRobots[i].Blid,
-							password = _hsRobots[i].Password,
-							stateString = _hsRobots[i].StateString,
-							ip = _hsRobots[i].ConnectedIp,
-							type = _hsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
-							name = _hsRobots[i].GetName(),
-							sku = _hsRobots[i].Robot?.Sku ?? "unknown"
+							blid = HsRobots[i].Blid,
+							password = HsRobots[i].Password,
+							stateString = HsRobots[i].StateString,
+							ip = HsRobots[i].ConnectedIp,
+							type = HsRobots[i].Type == RobotType.Vacuum ? "vacuum" : "mop",
+							name = HsRobots[i].GetName(),
+							sku = HsRobots[i].Robot?.Sku ?? "unknown"
 						};
 					}
 					
@@ -459,7 +476,7 @@ namespace HSPI_IRobot {
 						return badCmdResponse;
 					}
 
-					robot = _hsRobots.Find(bot => bot.Blid == blid);
+					robot = HsRobots.Find(bot => bot.Blid == blid);
 					return robot == null
 						? JsonConvert.SerializeObject(new { error = "Invalid blid" })
 						: JsonConvert.SerializeObject(new { status = robot.Robot?.ReportedState });
@@ -493,13 +510,13 @@ namespace HSPI_IRobot {
 				case "deleteRobot":
 					blid = (string) payload.SelectToken("blid");
 
-					robot = _hsRobots.Find(r => r.Blid == blid);
+					robot = HsRobots.Find(r => r.Blid == blid);
 					if (robot == null) {
 						return badCmdResponse;
 					}
 					
 					robot.Disconnect();
-					_hsRobots.Remove(robot);
+					HsRobots.Remove(robot);
 
 					HsDevice device = HomeSeerSystem.GetDeviceByAddress(blid);
 					HomeSeerSystem.DeleteDevice(device.Ref);
@@ -507,7 +524,7 @@ namespace HSPI_IRobot {
 				
 				case "debugReport":
 					// We're going to do this synchronously because it shouldn't happen often
-					Task<AnalyticsClient.DebugReportResponse> reportTask = _analyticsClient.DebugReport(new { Robots = _hsRobots });
+					Task<AnalyticsClient.DebugReportResponse> reportTask = _analyticsClient.DebugReport(new { Robots = HsRobots });
 					reportTask.Wait();
 					AnalyticsClient.DebugReportResponse response = reportTask.Result;
 					return response.Success

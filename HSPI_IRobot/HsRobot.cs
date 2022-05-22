@@ -268,6 +268,10 @@ namespace HSPI_IRobot {
 			return feature;
 		}
 
+		public double GetFeatureValue(FeatureType type) {
+			return (double) _plugin.GetHsController().GetPropertyByRef(GetFeature(type).Ref, EProperty.Value);
+		}
+
 		public string GetName() {
 			if (Robot?.Name != null) {
 				return Robot.Name;
@@ -275,6 +279,20 @@ namespace HSPI_IRobot {
 
 			HsDevice device = _plugin.GetHsController().GetDeviceByAddress(Blid);
 			return device.Name;
+		}
+
+		public bool IsNavigating() {
+			// Check whether we're navigating *based on HS feature status*
+			if (
+				!Enum.TryParse(GetFeatureValue(FeatureType.Status).ToString(CultureInfo.InvariantCulture), out RobotStatus cycle)
+				|| !Enum.TryParse(GetFeatureValue(FeatureType.JobPhase).ToString(CultureInfo.InvariantCulture), out CleanJobPhase phase)
+			) {
+				_plugin.WriteLog(ELogType.Warning, $"Unable to parse {Blid} status ({GetFeatureValue(FeatureType.Status)}) or phase ({GetFeatureValue(FeatureType.JobPhase)})");
+				return false;
+			}
+			
+			return new[] {RobotStatus.Clean, RobotStatus.DockManually, RobotStatus.Train}.Contains(cycle)
+			       && new[] {CleanJobPhase.Cleaning, CleanJobPhase.LowBatteryReturningToDock, CleanJobPhase.DoneReturningToDock}.Contains(phase);
 		}
 
 		public enum HsRobotState {
