@@ -62,6 +62,7 @@
         <Compile Include="FeaturePageHandlers\FavoriteJobs.cs" />
         <Compile Include="FeaturePageHandlers\ManageRobots.cs" />
         <Compile Include="FeatureUpdater.cs" />
+        <Compile Include="HsEvents\StartFavoriteJobAction.cs" />
         <Compile Include="HsEvents\RobotTrigger.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />

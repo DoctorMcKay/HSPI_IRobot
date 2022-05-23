@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
@@ -320,6 +319,10 @@ namespace HSPI_IRobot {
 		}
 
 		public bool StartFavoriteJob(string jobName) {
+			if (Robot == null || State != HsRobotState.Connected) {
+				return false;
+			}
+			
 			FavoriteJobs.FavoriteJob favorite = GetFavoriteJobs().Find(job => job.Name == jobName);
 			if (favorite.Equals(default(FavoriteJobs.FavoriteJob))) {
 				return false;
