@@ -17,6 +17,7 @@ namespace IRobotLANClient {
 	public abstract class Robot {
 		public bool Connected { get; private set; }
 		public JObject ReportedState { get; private set; } = new JObject();
+		public JObject LastJobStartCommand { get; private set; } = null;
 		public string Name { get; private set; }
 		public string Sku { get; private set; }
 		public byte BatteryLevel { get; private set; }
@@ -334,6 +335,10 @@ namespace IRobotLANClient {
 			ErrorCode = (int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0);
 			NotReadyCode = (int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0);
 			CanLearnMaps = (bool) (ReportedState.SelectToken("pmapLearningAllowed") ?? false);
+
+			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
+				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
+			}
 			
 			HandleRobotStateUpdate();
 			
