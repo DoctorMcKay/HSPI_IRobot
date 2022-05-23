@@ -88,15 +88,62 @@
             <div id="current-jobs-table-body" class="irobot-table-body"></div>
         </div>
         
+        <!-- Save favorite job modal -->
+        <div class="modal fade" id="nameNewJobModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Save Favorite Job</h4>
+                    </div>
+                    
+                    <div class="modal-body">
+                        <p>To save this job as a favorite, please give it a name.</p>
+
+                        <div class="md-form">
+                            <input type="text" id="add-favorite-name" class="form-control" />
+                            <label for="add-favorite-name">Favorite Name</label>
+                        </div>
+
+                        <p id="add-favorite-error" class="hs-bg-red-4 p-1" style="display: none"></p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
+                        <button id="btn-addfavorite" type="button" class="btn btn-success">Save Favorite</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generic confirm modal -->
+        <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title">Confirm</h4>
+                    </div>
+
+                    <div class="modal-body" id="confirm-modal-body"></div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
+                        <button id="btn-confirmmodalconfirm" type="button" class="btn btn-danger"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         {{includefile 'bootstrap/js/page_common.js'}}
         <script src="/iRobot/common.js"></script>
         <script>
             (async function() {
                 let g_FavoriteJobs = null;
                 let g_CurrentJobs = null;
+                let g_CurrentDraftFavorite = null;
                 
                 $('#btn-refresh-favorite-jobs').click(handleRefreshButton);
                 $('#btn-refresh-current-jobs').click(handleRefreshButton);
+                $('#btn-addfavorite').click(confirmAddFavorite);
                 
                 // Page loaded
                 refreshFavoriteJobs();
@@ -142,7 +189,7 @@
                     }
                     
                     favorites.forEach(({blid, robotName, job: {name, timestamp, command}}, idx) => {
-                        let {description} = getJobDetails(command);
+                        let {description} = getJobDetails(command, true);
                         
                         if (idx > 0) {
                             $tableBody.append('<hr class="d-sm-none" />');
@@ -155,9 +202,34 @@
                         
                         let $col = $div('col-sm-3');
                         let $btn = $('<button type="button" class="btn btn-link" />');
+                        $btn.text('Start');
+                        $btn.click(async function() {
+                            let {error} = await ajaxCmd('startJob', {blid, name});
+                            if (error) {
+                                alert(error);
+                            } else {
+                                $(this).prop('disabled', true).text('Started');
+                            }
+                        });
+                        $col.append($btn);
+                        
+                        $btn = $('<button type="button" class="btn btn-link" />');
                         $btn.text('Delete');
-                        $btn.click(() => {
-                            // TODO
+                        $btn.click(async () => {
+                            let {usages} = await ajaxCmd('getJobUsages', {blid, name});
+                            if (usages.length > 0) {
+                                let {confirmed} = await confirmModal([
+                                    `Are you sure you want to delete favorite job "${name}"? The ${usages.length} event${usages.length == 1 ? '' : 's'} that use${usages.length == 1 ? 's' : ''} it will stop working unless you save a new job with the same name for the same robot.`,
+                                    `Event${usages.length == 1 ? '' : 's'}: ` + usages.join(', ')
+                                ], 'Delete Favorite');
+                                
+                                if (!confirmed) {
+                                    return;
+                                }
+                            }
+                            
+                            await ajaxCmd('deleteJob', {blid, name});
+                            refreshFavoriteJobs();
                         });
                         $col.append($btn);
                         $row.append($col);
@@ -199,7 +271,10 @@
                             $btn.text(favoritable ? 'Save as Favorite' : 'Not Favoritable');
                             $btn.prop('disabled', !favoritable);
                             $btn.click(() => {
-                                // TODO
+                                g_CurrentDraftFavorite = {blid: robot.blid, command: robot.lastCommand, btn: $btn};
+                                $('#add-favorite-name').val('');
+                                $('#add-favorite-error').hide();
+                                $('#nameNewJobModal').modal();
                             });
                             $col.append($btn);
                         }
@@ -209,10 +284,26 @@
                     });
                 }
                 
-                function getJobDetails(cmd) {
+                async function confirmAddFavorite() {
+                    let $name = $('#add-favorite-name');
+                    if (!g_CurrentDraftFavorite || $name.val().trim().length == 0) {
+                        return;
+                    }
+                    
+                    let {error} = await ajaxCmd('saveJob', {name: $name.val().trim(), blid: g_CurrentDraftFavorite.blid, command: g_CurrentDraftFavorite.command});
+                    if (error) {
+                        $('#add-favorite-error').text(error).show();
+                    } else {
+                        g_CurrentDraftFavorite.btn.attr('disabled', true).text('Favorite Saved');
+                        $('#nameNewJobModal').modal('hide');
+                        refreshFavoriteJobs();
+                    }
+                }
+                
+                function getJobDetails(cmd, ignoreCommand = false) {
                     cmd = cmd || {};
                     
-                    if (cmd.command != 'start') {
+                    if (!ignoreCommand && cmd.command != 'start') {
                         return {
                             favoritable: false,
                             description: 'No job',
@@ -221,7 +312,7 @@
                     }
                     
                     let keys = Object.keys(cmd).filter(k => cmd[k] !== null);
-                    if (!keys.some(k => !['command', 'initiator', 'time'].includes(k))) {
+                    if (!keys.some(k => !['command', 'initiator', 'time', 'robot_id'].includes(k))) {
                         return {
                             favoritable: false,
                             description: 'Standard cleaning job',
@@ -229,25 +320,43 @@
                         };
                     }
                     
+                    let favoritable = true;
+                    
                     let commandDescriptors = [];
                     if (cmd.params && cmd.params.timebox) {
                         commandDescriptors.push(`${cmd.params.timebox} minute time limit`);
+                        favoritable = false; // time-limited cleanings are cloud-dependent for some insane reason
                     }
 
                     if (cmd.regions && cmd.regions.length > 0) {
-                        let descriptor = `${cmd.regions.length} region`;
+                        let subDescriptors = [];
+                        let rooms = cmd.regions.filter(r => r.type == 'rid').length;
+                        let zones = cmd.regions.filter(r => r.type == 'zid').length;
+                        let other = cmd.regions.length - rooms - zones;
+                        if (rooms > 0) {
+                            subDescriptors.push(`${rooms} room${rooms == 1 ? '' : 's'}`);
+                        }
+                        if (zones > 0) {
+                            subDescriptors.push(`${zones} zone${zones == 1 ? '' : 's'}`);
+                        }
+                        if (other) {
+                            subDescriptors.push(`${other} region${other == 1 ? '' : 's'}`);
+                        }
+                        
+                        let descriptor = subDescriptors.join(', ');
                         if (cmd.regions.length > 1) {
-                            descriptor += `s (${cmd.ordered ? 'ordered' : 'unordered'})`;
+                            descriptor += ` (${cmd.ordered ? 'ordered' : 'unordered'})`;
                         }
                         commandDescriptors.push(descriptor);
                     }
                     
                     if (cmd.params && cmd.params.team && cmd.params.team.team_id) {
                         commandDescriptors.push('Imprint Link teaming');
+                        favoritable = false; // teaming is also cloud-dependent, but that's less surprising to me
                     }
                     
                     return {
-                        favoritable: true,
+                        favoritable,
                         description: commandDescriptors.join(', ') || 'Custom cleaning job',
                         hasJob: true
                     };
