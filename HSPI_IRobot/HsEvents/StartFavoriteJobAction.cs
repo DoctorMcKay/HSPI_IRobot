@@ -9,6 +9,8 @@ using HSPI_IRobot.FeaturePageHandlers;
 
 namespace HSPI_IRobot.HsEvents {
 	public class StartFavoriteJobAction : AbstractActionType {
+		public const int ActionNumber = 1;
+		
 		private string OptionIdRobot => $"{PageId}-Robot";
 		private string OptionIdJob => $"{PageId}-JobName";
 		private HSPI Plugin => (HSPI) ActionListener;
@@ -43,14 +45,16 @@ namespace HSPI_IRobot.HsEvents {
 			}
 			
 			// Always remove the existing job view (if present) when the robot is changed
-			ConfigPage.RemoveViewById(OptionIdJob);
+			if (ConfigPage.ContainsViewWithId(OptionIdJob)) {
+				ConfigPage.RemoveViewById(OptionIdJob);
+			}
 
 			SelectListView changedRobotView = (SelectListView) configViewChange;
 			if (changedRobotView.Selection == -1) {
 				return true;
 			}
 			
-			HsRobot robot = _getRobot();
+			HsRobot robot = _getRobot(ConfigPage.GetViewById<SelectListView>(OptionIdRobot).OptionKeys[changedRobotView.Selection]);
 			if (robot == null) {
 				// Shouldn't happen but whatever
 				return false;
@@ -75,7 +79,8 @@ namespace HSPI_IRobot.HsEvents {
 
 			HsRobot robot = _getRobot();
 			string jobName = ConfigPage.GetViewById<SelectListView>(OptionIdJob).GetSelectedOption();
-			return $"iRobot: Start favorite job <font class=\"event_Txt_Selection\">{jobName}</font> on <font class=\"event_Txt_Selection\">{robot.GetName()}</font>";
+			bool jobExists = robot.GetFavoriteJobs().Any(job => job.Name == jobName);
+			return $"iRobot: Start favorite job <font class=\"event_Txt_Selection\">{jobName}{(!jobExists ? " (JOB NO LONGER EXISTS)" : "")}</font> on <font class=\"event_Txt_Selection\">{robot.GetName()}</font>";
 		}
 
 		public override bool OnRunAction() {
@@ -93,6 +98,17 @@ namespace HSPI_IRobot.HsEvents {
 			string address = (string) Plugin.GetHsController().GetPropertyByRef(devOrFeatRef, EProperty.Address);
 			return address.StartsWith(blid);
 		}
+
+		public bool ReferencesFavoriteJob(string blid, string jobName) {
+			return IsFullyConfigured()
+			       && _getRobotBlid() == blid
+			       && ConfigPage.GetViewById<SelectListView>(OptionIdJob).GetSelectedOption() == jobName;
+		}
+
+		public string GetEventGroupAndName() {
+			EventData evt = HSPI.Instance.GetHsController().GetEventByRef(EventRef);
+			return $"{evt.GroupName} {evt.Event_Name}";
+		}
 		
 		private string _getRobotBlid() {
 			if (ConfigPage == null || !ConfigPage.ContainsViewWithId(OptionIdRobot)) {
@@ -103,8 +119,8 @@ namespace HSPI_IRobot.HsEvents {
 			return string.IsNullOrEmpty(blid) ? null : blid;
 		}
 
-		private HsRobot _getRobot() {
-			string blid = _getRobotBlid();
+		private HsRobot _getRobot(string blid = null) {
+			blid = blid ?? _getRobotBlid();
 			if (blid == null) {
 				return null;
 			}

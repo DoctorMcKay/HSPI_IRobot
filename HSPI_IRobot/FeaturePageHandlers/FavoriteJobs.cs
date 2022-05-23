@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using HomeSeer.PluginSdk.Devices;
+using HSPI_IRobot.HsEvents;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -14,6 +14,9 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				
 				case "saveJob":
 					return _saveJob((string) payload.SelectToken("blid"), (string) payload.SelectToken("name"), (JObject) payload.SelectToken("command"));
+				
+				case "getJobUsages":
+					return _getJobUsages((string) payload.SelectToken("blid"), (string) payload.SelectToken("name"));
 				
 				case "deleteJob":
 					return _deleteJob((string) payload.SelectToken("blid"), (string) payload.SelectToken("name"));
@@ -80,6 +83,34 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			
 			robot.SaveFavoriteJobs(favorites);
 			return SuccessResponse;
+		}
+
+		private string _getJobUsages(string blid, string name) {
+			if (blid == null || string.IsNullOrWhiteSpace(name)) {
+				return BadCmdResponse;
+			}
+			
+			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
+			if (robot == null) {
+				return ErrorResponse("Invalid blid");
+			}
+
+			List<FavoriteJob> favorites = robot.GetFavoriteJobs();
+			int idx = favorites.FindIndex(job => job.Name == name);
+
+			if (idx == -1) {
+				return ErrorResponse("No such job found");
+			}
+
+			string[] usages = HSPI.Instance.GetHsController()
+				.GetActionsByInterface(HSPI.Instance.Id)
+				.Where(tai => tai.TANumber == StartFavoriteJobAction.ActionNumber)
+				.Select(tai => new StartFavoriteJobAction(tai.UID, tai.evRef, tai.DataIn, HSPI.Instance))
+				.Where(action => action.ReferencesFavoriteJob(blid, name))
+				.Select(action => action.GetEventGroupAndName())
+				.ToArray();
+
+			return JsonConvert.SerializeObject(new {usages});
 		}
 
 		private string _deleteJob(string blid, string name) {
