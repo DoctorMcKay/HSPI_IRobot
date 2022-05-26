@@ -18,7 +18,6 @@ using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
@@ -167,11 +166,6 @@ namespace HSPI_IRobot {
 
 		private void HandleRobotConnectionStateUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
-			WriteLog(
-				robot.State == HsRobot.HsRobotState.Connecting || robot.State == HsRobot.HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
-				$"Robot {robot.Blid} connection state update: {robot.State} / {robot.CannotConnectReason} / {robot.StateString}"
-			);
-
 			HsFeature errorFeature = robot.GetFeature(FeatureType.Error);
 
 			switch (robot.State) {
@@ -422,6 +416,29 @@ namespace HSPI_IRobot {
 				timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
 
 				return "OK";
+			} catch (RobotConnectionException ex) {
+				RobotDiscovery.DiscoveredRobot robotMetadata = await new RobotDiscovery().GetRobotPublicDetails(ip);
+				if (robotMetadata == null) {
+					return "This IP address doesn't appear to belong to an iRobot product.";
+				}
+
+				if (robotMetadata.Blid != blid) {
+					return $"Provided BLID does not belong to the robot at IP address {ip}. This robot's BLID is {robotMetadata.Blid}.";
+				}
+				
+				switch (ex.ConnectionError) {
+					case ConnectionError.ConnectionRefused:
+						// Make sure that this is actually the robot we think it is
+						return "Another app is already connected to this robot. Make sure that the iRobot Home app is " +
+						       "fully closed on your mobile device(s) and that no other home automation plugins for " +
+						       "iRobot devices are running.";
+
+					case ConnectionError.ConnectionTimedOut:
+						return "Connection timed out. Make sure the IP address is correct.";
+					
+					default:
+						return ex.FriendlyMessage;
+				}
 			} catch (Exception ex) {
 				// Failed to connect
 				return ex.Message;
@@ -502,6 +519,8 @@ namespace HSPI_IRobot {
 		}
 
 		public void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {
+			_analyticsClient?.WriteLog(logType, message, lineNumber, caller);
+			
 #if DEBUG
 			bool isDebugMode = true;
 

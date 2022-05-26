@@ -98,7 +98,7 @@ namespace IRobotLANClient {
 			try {
 				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
 				connectTimeout.Stop();
-				
+
 				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
 				// but let's subscribe anyway just to be a good citizen
 				await MqttClient.SubscribeAsync(MqttStatusTopic);
@@ -107,6 +107,22 @@ namespace IRobotLANClient {
 				return result;
 			} catch (OperationCanceledException) {
 				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
+			} catch (Exception ex) {
+				for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
+					if (checkException.Message.Contains("BadUserNameOrPassword")) {
+						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
+					}
+
+					if (checkException.Message.Contains("actively refused it")) {
+						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
+					}
+
+					if (checkException.Message.Contains("timed out")) {
+						throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
+					}
+				}
+				
+				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 			}
 		}
 

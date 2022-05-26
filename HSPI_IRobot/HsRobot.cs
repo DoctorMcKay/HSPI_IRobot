@@ -79,11 +79,32 @@ namespace HSPI_IRobot {
 				string discoveredRobotIp = await FindRobot();
 				if (discoveredRobotIp == null || discoveredRobotIp == connectIp) {
 					// Either we couldn't discover the robot, or it has the same IP as we already tried
-					UpdateState(
-						HsRobotState.CannotConnect,
-						discoveredRobotIp == connectIp ? HsRobotCannotConnectReason.DiscoveredCannotConnect : HsRobotCannotConnectReason.CannotDiscover,
-						discoveredRobotIp == connectIp ? "Robot credentials are incorrect or another app is already connected" : "Robot was not found on the network"
-					);
+
+					HsRobotCannotConnectReason cannotConnectReason;
+					string stringState;
+
+					if (discoveredRobotIp == connectIp) {
+						// We discovered it, but can't connect
+						cannotConnectReason = HsRobotCannotConnectReason.DiscoveredCannotConnect;
+						if (ex is RobotConnectionException exception) {
+							_plugin.WriteLog(
+								exception.ConnectionError == ConnectionError.UnspecifiedError ? ELogType.Warning : ELogType.Debug,
+								$"Connection error for {Blid}: {exception.RecursiveMessage}"
+							);
+							
+							stringState = exception.FriendlyMessage;
+						} else {
+							_plugin.WriteLog(ELogType.Warning, $"Unspecified connection error type for {Blid}: {ex.Message}");
+							stringState = ex.Message;
+						}
+					} else {
+						// Not discovered
+						_plugin.WriteLog(ELogType.Debug, $"Connection error for {Blid}: not discovered on network");
+						cannotConnectReason = HsRobotCannotConnectReason.CannotDiscover;
+						stringState = "Not found on the network";
+					}
+
+					UpdateState(HsRobotState.CannotConnect, cannotConnectReason, stringState);
 					EnqueueReconnectAttempt();
 					return;
 				}
@@ -171,6 +192,11 @@ namespace HSPI_IRobot {
 		}
 
 		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
+			_plugin.WriteLog(
+				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
+				$"Robot {Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
+			);
+			
 			State = state;
 			CannotConnectReason = cannotConnectReason;
 			StateString = stateString;

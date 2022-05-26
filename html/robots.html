@@ -245,7 +245,7 @@
 					$('#robot-full-status').val(JSON.stringify(status, undefined, '\t')).show();
 				});
 				$('#btn-debugreport').click(async function() {
-					let {confirmed} = await confirmModal('Send a debug report? This will send all of your robots\' data to the plugin author.', 'Send Debug Report');
+					let {confirmed} = await confirmModal('Send a debug report? This will send all of your robots\' data and plugin log to the plugin author.', 'Send Debug Report');
 					if (!confirmed) {
 						return;
 					}
