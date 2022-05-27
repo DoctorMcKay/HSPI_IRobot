@@ -56,7 +56,7 @@ namespace HSPI_IRobot.HsEvents {
 			}
 
 			string triggerName = SubTriggerTypeNames[SelectedSubTriggerIndex].Substring("A robot ".Length);
-			return $"<font class=\"event_Txt_Option\">{robot.GetName()}</font> <font class=\"event_Txt_Selection\">{triggerName}</font>";
+			return $"iRobot: <font class=\"event_Txt_Option\">{robot.GetName()}</font> <font class=\"event_Txt_Selection\">{triggerName}</font>";
 		}
 
 		public override bool IsTriggerTrue(bool isCondition) {

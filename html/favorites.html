@@ -219,8 +219,8 @@
                             let {usages} = await ajaxCmd('getJobUsages', {blid, name});
                             if (usages.length > 0) {
                                 let {confirmed} = await confirmModal([
-                                    `Are you sure you want to delete favorite job "${name}"? The ${usages.length} event${usages.length == 1 ? '' : 's'} that use${usages.length == 1 ? 's' : ''} it will stop working unless you save a new job with the same name for the same robot.`,
-                                    `Event${usages.length == 1 ? '' : 's'}: ` + usages.join(', ')
+                                    `Are you sure you want to delete favorite job "${name}"? The ${usages.length} ${pluralize('event', usages.length)} that use${usages.length == 1 ? 's' : ''} it will stop working unless you save a new job with the same name for the same robot.`,
+                                    `${pluralize('Event', usages.length)}: ` + usages.join(', ')
                                 ], 'Delete Favorite');
                                 
                                 if (!confirmed) {
@@ -320,27 +320,25 @@
                         };
                     }
                     
-                    let favoritable = true;
+                    let favoritable = false;
                     
                     let commandDescriptors = [];
-                    if (cmd.params && cmd.params.timebox) {
-                        commandDescriptors.push(`${cmd.params.timebox} minute time limit`);
-                        favoritable = false; // time-limited cleanings are cloud-dependent for some insane reason
-                    }
 
+                    // Right now, region cleaning is the only thing we can favorite since it's the only type of complex job
+                    // that can be initiated without getting the cloud involved.
                     if (cmd.regions && cmd.regions.length > 0) {
                         let subDescriptors = [];
                         let rooms = cmd.regions.filter(r => r.type == 'rid').length;
                         let zones = cmd.regions.filter(r => r.type == 'zid').length;
                         let other = cmd.regions.length - rooms - zones;
                         if (rooms > 0) {
-                            subDescriptors.push(`${rooms} room${rooms == 1 ? '' : 's'}`);
+                            subDescriptors.push(`${rooms} ${pluralize('room', rooms)}`);
                         }
                         if (zones > 0) {
-                            subDescriptors.push(`${zones} zone${zones == 1 ? '' : 's'}`);
+                            subDescriptors.push(`${zones} ${pluralize('zone', zones)}`);
                         }
                         if (other) {
-                            subDescriptors.push(`${other} region${other == 1 ? '' : 's'}`);
+                            subDescriptors.push(`${other} ${pluralize('region', other)}`);
                         }
                         
                         let descriptor = subDescriptors.join(', ');
@@ -348,6 +346,12 @@
                             descriptor += ` (${cmd.ordered ? 'ordered' : 'unordered'})`;
                         }
                         commandDescriptors.push(descriptor);
+                        favoritable = true;
+                    }
+
+                    if (cmd.params && cmd.params.timebox) {
+                        commandDescriptors.push(`${cmd.params.timebox} minute time limit`);
+                        favoritable = false; // time-limited cleanings are cloud-dependent for some insane reason
                     }
                     
                     if (cmd.params && cmd.params.team && cmd.params.team.team_id) {

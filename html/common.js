@@ -114,3 +114,12 @@ function textCol($row, colClass, value) {
     $col.text(value);
     $row.append($col);
 }
+
+function pluralize(word, quantity) {
+    if (quantity == 1) {
+        return word;
+    }
+    
+    let finalLetter = word.substring(word.length - 1);
+    return finalLetter == 's' ? word + 'es' : word + 's';
+}
