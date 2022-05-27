@@ -88,7 +88,7 @@ namespace HSPI_IRobot {
 			HsRobots = new List<HsRobot>();
 
 			await Task.WhenAll(HomeSeerSystem.GetRefsByInterface(Id, true).Select(deviceRef => Task.Run(async () => {
-				await InitializeDevice(HomeSeerSystem.GetDeviceByRef(deviceRef));
+				await InitializeDevice(deviceRef);
 			})).ToList());
 
 			int countRobots = HsRobots.Count;
@@ -96,8 +96,8 @@ namespace HSPI_IRobot {
 			WriteLog(ELogType.Info, $"All devices initialized. Found {countRobots} robots and {connectedRobots} connected successfully");
 		}
 
-		private async Task InitializeDevice(HsDevice device) {
-			HsRobot robot = new HsRobot(device);
+		private async Task InitializeDevice(int deviceRef) {
+			HsRobot robot = new HsRobot(deviceRef);
 			HsRobots.Add(robot);
 
 			robot.OnConnectStateUpdated += HandleRobotConnectionStateUpdate;
@@ -108,9 +108,14 @@ namespace HSPI_IRobot {
 			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
-				PlugExtraData extraData = device.PlugExtraData;
-				extraData["lastknownip"] = robot.ConnectedIp;
-				HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, extraData);
+				PlugExtraData ped = robot.PlugExtraData;
+				if (!ped.ContainsNamed("lastknownip")) {
+					ped.AddNamed("lastknownip", robot.ConnectedIp);
+				} else {
+					ped["lastknownip"] = robot.ConnectedIp;
+				}
+
+				robot.PlugExtraData = ped;
 			}
 		}
 
@@ -342,7 +347,7 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, $"{robot.GetName()} navigating status changed: {wasNavigating} -> {!wasNavigating}");
 				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
 					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
-					if (trigger.ReferencesDeviceOrFeature(robot.HsDevice.Ref) && trigger.IsTriggerTrue(false)) {
+					if (trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef) && trigger.IsTriggerTrue(false)) {
 						HomeSeerSystem.TriggerFire(Id, trigActInfo);
 					}
 				}
@@ -498,7 +503,7 @@ namespace HSPI_IRobot {
 				);
 			}
 
-			await InitializeDevice(HomeSeerSystem.GetDeviceByRef(newDeviceRef));
+			await InitializeDevice(newDeviceRef);
 		}
 
 		public AnalyticsClient GetAnalyticsClient() {
@@ -519,14 +524,14 @@ namespace HSPI_IRobot {
 			};
 		}
 
-		public void BackupPlugExtraData(AbstractHsDevice device) {
-			PlugExtraData ped = (PlugExtraData) HomeSeerSystem.GetPropertyByRef(device.Ref, EProperty.PlugExtraData);
+		public void BackupPlugExtraData(int deviceRef) {
+			PlugExtraData ped = (PlugExtraData) HomeSeerSystem.GetPropertyByRef(deviceRef, EProperty.PlugExtraData);
 			Dictionary<string, string> backup = ped.NamedKeys.ToDictionary(key => key, key => ped[key]);
-			HomeSeerSystem.SaveINISetting("PED_Backup", device.Ref.ToString(), JsonConvert.SerializeObject(backup), SettingsFileName);
+			HomeSeerSystem.SaveINISetting("PED_Backup", deviceRef.ToString(), JsonConvert.SerializeObject(backup), SettingsFileName);
 		}
 
-		public bool RestorePlugExtraData(AbstractHsDevice device) {
-			string jsonPayload = HomeSeerSystem.GetINISetting("PED_Backup", device.Ref.ToString(), string.Empty, SettingsFileName);
+		public bool RestorePlugExtraData(int deviceRef) {
+			string jsonPayload = HomeSeerSystem.GetINISetting("PED_Backup", deviceRef.ToString(), string.Empty, SettingsFileName);
 			if (string.IsNullOrEmpty(jsonPayload)) {
 				return false;
 			}
@@ -537,7 +542,7 @@ namespace HSPI_IRobot {
 				ped.AddNamed(prop.Name, (string) prop.Value);
 			}
 
-			HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, ped);
+			HomeSeerSystem.UpdatePropertyByRef(deviceRef, EProperty.PlugExtraData, ped);
 			return true;
 		}
 

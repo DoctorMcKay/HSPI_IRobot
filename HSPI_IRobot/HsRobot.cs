@@ -20,53 +20,67 @@ namespace HSPI_IRobot {
 		public string StateString { get; private set; } = "Connecting";
 		public string ConnectedIp { get; private set; }
 		public Robot Robot { get; private set; } = null;
-		public readonly HsDevice HsDevice;
+
+		public HsDevice HsDevice => _plugin.GetHsController().GetDeviceByRef(HsDeviceRef);
+		
+		public PlugExtraData PlugExtraData {
+			get => (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDeviceRef, EProperty.PlugExtraData);
+			set => _plugin.GetHsController().UpdatePropertyByRef(HsDeviceRef, EProperty.PlugExtraData, value);
+		}
+
+		public readonly int HsDeviceRef;
 		public readonly RobotType Type;
 		public readonly string Blid;
-		public readonly string Password;
+		[JsonIgnore] public readonly string Password;
 		
 		private readonly HSPI _plugin;
 		private bool _robotTypeFailedValidation = false;
-		private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
+		[JsonProperty] private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
 		private Timer _reconnectTimer = null;
 		private Timer _stateUpdateDebounceTimer = null;
 		
 		// These properties are used for correcting the robot's erroneous phase change from "charge" to "run" when ending a job
 		private DateTime _lastDockToChargeTransition = DateTime.Now;
 		private MissionPhase _lastObservedMissionPhase = MissionPhase.Unknown;
+		
+		// These properties are just for debug reports
+		[JsonProperty] private Exception _lastConnectException;
 
 		public event EventHandler OnConnectStateUpdated;
 		public event EventHandler OnRobotStatusUpdated;
 
-		public HsRobot(HsDevice hsDevice) {
+		public HsRobot(int deviceRef) {
 			_plugin = HSPI.Instance;
-			HsDevice = hsDevice;
+			HsDeviceRef = deviceRef;
 
 			try {
-				Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
-				Blid = HsDevice.PlugExtraData["blid"];
-				Password = HsDevice.PlugExtraData["password"];
+				PlugExtraData ped = PlugExtraData;
+				Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+				Blid = ped["blid"];
+				Password = ped["password"];
 				
-				_plugin.BackupPlugExtraData(hsDevice);
+				_plugin.BackupPlugExtraData(deviceRef);
 			} catch (KeyNotFoundException) {
-				_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is corrupt. Attempting automatic repair.");
-				if (!_plugin.RestorePlugExtraData(hsDevice)) {
+				string deviceName = HsDevice.Name;
+				
+				_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is corrupt. Attempting automatic repair.");
+				if (!_plugin.RestorePlugExtraData(deviceRef)) {
 					State = HsRobotState.FatalError;
 					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
-					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
 					return;
 				}
 				
 				// Try to init again
 				try {
-					PlugExtraData ped = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(hsDevice.Ref, EProperty.PlugExtraData);
+					PlugExtraData ped = PlugExtraData;
 					Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
 					Blid = ped["blid"];
 					Password = ped["password"];
 				} catch (KeyNotFoundException) {
 					State = HsRobotState.FatalError;
 					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
-					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
 				}
 			}
 		}
@@ -79,7 +93,8 @@ namespace HSPI_IRobot {
 			
 			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.Ok, "Connecting");
 
-			string lastKnownIp = HsDevice.PlugExtraData.ContainsNamed("lastknownip") ? HsDevice.PlugExtraData["lastknownip"] : null;
+			PlugExtraData ped = PlugExtraData;
+			string lastKnownIp = ped.ContainsNamed("lastknownip") ? ped["lastknownip"] : null;
 			string connectIp = ip ?? lastKnownIp ?? "127.0.0.1";
 			
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
@@ -100,6 +115,8 @@ namespace HSPI_IRobot {
 			try {
 				await robot.Connect();
 			} catch (Exception ex) {
+				_lastConnectException = ex;
+				
 				_plugin.WriteLog(ELogType.Warning, $"Unable to connect to robot {Blid} at {connectIp}: {ex.Message}");
 				string discoveredRobotIp = await FindRobot();
 				if (discoveredRobotIp == null || discoveredRobotIp == connectIp) {
@@ -350,23 +367,23 @@ namespace HSPI_IRobot {
 		}
 
 		public List<FavoriteJobs.FavoriteJob> GetFavoriteJobs() {
-			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
-			return !extraData.ContainsNamed("favoritejobs")
+			PlugExtraData ped = PlugExtraData;
+			return !ped.ContainsNamed("favoritejobs")
 				? new List<FavoriteJobs.FavoriteJob>()
-				: JArray.Parse(extraData["favoritejobs"]).Select(token => token.ToObject<FavoriteJobs.FavoriteJob>()).ToList();
+				: JArray.Parse(ped["favoritejobs"]).Select(token => token.ToObject<FavoriteJobs.FavoriteJob>()).ToList();
 		}
 
 		public void SaveFavoriteJobs(List<FavoriteJobs.FavoriteJob> favorites) {
-			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
+			PlugExtraData ped = PlugExtraData;
 			string serializedFavorites = JsonConvert.SerializeObject(favorites);
 			
-			if (!extraData.ContainsNamed("favoritejobs")) {
-				extraData.AddNamed("favoritejobs", serializedFavorites);
+			if (!ped.ContainsNamed("favoritejobs")) {
+				ped.AddNamed("favoritejobs", serializedFavorites);
 			} else {
-				extraData["favoritejobs"] = serializedFavorites;
+				ped["favoritejobs"] = serializedFavorites;
 			}
-			
-			_plugin.GetHsController().UpdatePropertyByRef(HsDevice.Ref, EProperty.PlugExtraData, extraData);
+
+			PlugExtraData = ped;
 		}
 
 		public bool StartFavoriteJob(string jobName) {

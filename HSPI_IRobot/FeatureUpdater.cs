@@ -47,10 +47,10 @@ namespace HSPI_IRobot {
 					newFeatureVersion = updateMethod(feature, featureVersion);
 				} while (newFeatureVersion > featureVersion); // keep updating as long as it changes things
 				
-				_plugin.BackupPlugExtraData(feature);
+				_plugin.BackupPlugExtraData(feature.Ref);
 			} catch (KeyNotFoundException) {
 				_plugin.WriteLog(ELogType.Error, $"Feature {feature.Ref} is corrupt. Attempting automatic repair.");
-				if (_plugin.RestorePlugExtraData(feature)) {
+				if (_plugin.RestorePlugExtraData(feature.Ref)) {
 					_plugin.WriteLog(ELogType.Info, $"Repair of feature {feature.Ref} succeeded");
 					ExecuteFeatureUpdates(feature);
 					return;
