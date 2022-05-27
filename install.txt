@@ -5,4 +5,6 @@ IRobotLANClient.dll,.\bin\iRobot,0
 MQTTnet.dll,.\bin\iRobot,0
 Newtonsoft.Json.dll,.\bin\iRobot,0
 PluginSdk.dll,.\bin\iRobot,0
+common.js,.\html\iRobot,0
+favorites.html,.\html\iRobot,0
 robots.html,.\html\iRobot,0
