@@ -43,14 +43,15 @@ namespace HSPI_IRobot {
 				do {
 					// Update the feature
 					feature = _plugin.GetHsController().GetFeatureByRef(feature.Ref);
-					featureVersion = int.Parse(feature.PlugExtraData.ContainsNamed("version") ? feature.PlugExtraData["version"] : "1");
+					featureVersion = int.Parse(feature.PlugExtraData["version"]);
 					newFeatureVersion = updateMethod(feature, featureVersion);
 				} while (newFeatureVersion > featureVersion); // keep updating as long as it changes things
 				
 				_plugin.BackupPlugExtraData(feature);
 			} catch (KeyNotFoundException) {
 				_plugin.WriteLog(ELogType.Error, $"Feature {feature.Ref} is corrupt. Attempting automatic repair.");
-				if (!_plugin.RestorePlugExtraData(feature)) {
+				if (_plugin.RestorePlugExtraData(feature)) {
+					_plugin.WriteLog(ELogType.Info, $"Repair of feature {feature.Ref} succeeded");
 					ExecuteFeatureUpdates(feature);
 					return;
 				}

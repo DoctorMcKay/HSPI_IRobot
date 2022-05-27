@@ -40,7 +40,7 @@ namespace HSPI_IRobot {
 		protected override void Initialize() {
 			string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
 			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(Robot)).Location).FileVersion;
-			
+
 #if DEBUG
 			WriteLog(ELogType.Info, $"Plugin version {pluginVersion} starting with client version {irobotClientVersion}");
 #else
@@ -533,8 +533,8 @@ namespace HSPI_IRobot {
 
 			PlugExtraData ped = new PlugExtraData();
 			JObject payload = JObject.Parse(jsonPayload);
-			foreach (string key in payload.Properties()) {
-				ped.AddNamed(key, (string) payload.SelectToken(key));
+			foreach (JProperty prop in payload.Properties()) {
+				ped.AddNamed(prop.Name, (string) prop.Value);
 			}
 
 			HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, ped);
