@@ -18,6 +18,7 @@ using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
@@ -516,6 +517,28 @@ namespace HSPI_IRobot {
 				Patch = int.Parse(versionParts[2]),
 				Build = int.Parse(versionParts[3])
 			};
+		}
+
+		public void BackupPlugExtraData(AbstractHsDevice device) {
+			PlugExtraData ped = (PlugExtraData) HomeSeerSystem.GetPropertyByRef(device.Ref, EProperty.PlugExtraData);
+			Dictionary<string, string> backup = ped.NamedKeys.ToDictionary(key => key, key => ped[key]);
+			HomeSeerSystem.SaveINISetting("PED_Backup", device.Ref.ToString(), JsonConvert.SerializeObject(backup), SettingsFileName);
+		}
+
+		public bool RestorePlugExtraData(AbstractHsDevice device) {
+			string jsonPayload = HomeSeerSystem.GetINISetting("PED_Backup", device.Ref.ToString(), string.Empty, SettingsFileName);
+			if (string.IsNullOrEmpty(jsonPayload)) {
+				return false;
+			}
+
+			PlugExtraData ped = new PlugExtraData();
+			JObject payload = JObject.Parse(jsonPayload);
+			foreach (string key in payload.Properties()) {
+				ped.AddNamed(key, (string) payload.SelectToken(key));
+			}
+
+			HomeSeerSystem.UpdatePropertyByRef(device.Ref, EProperty.PlugExtraData, ped);
+			return true;
 		}
 
 		public void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {

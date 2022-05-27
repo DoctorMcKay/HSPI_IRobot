@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Devices.Identification;
 using HomeSeer.PluginSdk.Logging;
@@ -34,16 +35,31 @@ namespace HSPI_IRobot {
 			if (updateMethod == null) {
 				return;
 			}
-			
-			// This feature has updates that exist, so let's run them. Keep running the update until all updates have
-			// been run (indicated by false return).
-			int featureVersion, newFeatureVersion;
-			do {
-				// Update the feature
-				feature = _plugin.GetHsController().GetFeatureByRef(feature.Ref);
-				featureVersion = int.Parse(feature.PlugExtraData.ContainsNamed("version") ? feature.PlugExtraData["version"] : "1");
-				newFeatureVersion = updateMethod(feature, featureVersion);
-			} while (newFeatureVersion > featureVersion); // keep updating as long as it changes things
+
+			try {
+				// This feature has updates that exist, so let's run them. Keep running the update until all updates have
+				// been run (indicated by false return).
+				int featureVersion, newFeatureVersion;
+				do {
+					// Update the feature
+					feature = _plugin.GetHsController().GetFeatureByRef(feature.Ref);
+					featureVersion = int.Parse(feature.PlugExtraData.ContainsNamed("version") ? feature.PlugExtraData["version"] : "1");
+					newFeatureVersion = updateMethod(feature, featureVersion);
+				} while (newFeatureVersion > featureVersion); // keep updating as long as it changes things
+				
+				_plugin.BackupPlugExtraData(feature);
+			} catch (KeyNotFoundException) {
+				_plugin.WriteLog(ELogType.Error, $"Feature {feature.Ref} is corrupt. Attempting automatic repair.");
+				if (!_plugin.RestorePlugExtraData(feature)) {
+					ExecuteFeatureUpdates(feature);
+					return;
+				}
+
+				_plugin.WriteLog(ELogType.Error, $"Feature {feature.Ref} is irreparably corrupt. Deleting it so it can be re-created.");
+				_plugin.GetHsController().DeleteFeature(feature.Ref);
+				_plugin.WriteLog(ELogType.Error, "Restarting plugin");
+				Environment.Exit(1);
+			}
 		}
 
 		private int ExecuteBatteryUpdate(HsFeature feature, int featureVersion) {

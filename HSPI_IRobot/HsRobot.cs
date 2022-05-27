@@ -41,9 +41,34 @@ namespace HSPI_IRobot {
 		public HsRobot(HsDevice hsDevice) {
 			_plugin = HSPI.Instance;
 			HsDevice = hsDevice;
-			Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
-			Blid = HsDevice.PlugExtraData["blid"];
-			Password = HsDevice.PlugExtraData["password"];
+
+			try {
+				Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+				Blid = HsDevice.PlugExtraData["blid"];
+				Password = HsDevice.PlugExtraData["password"];
+				
+				_plugin.BackupPlugExtraData(hsDevice);
+			} catch (KeyNotFoundException) {
+				_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is corrupt. Attempting automatic repair.");
+				if (!_plugin.RestorePlugExtraData(hsDevice)) {
+					State = HsRobotState.FatalError;
+					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+					return;
+				}
+				
+				// Try to init again
+				try {
+					PlugExtraData ped = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(hsDevice.Ref, EProperty.PlugExtraData);
+					Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+					Blid = ped["blid"];
+					Password = ped["password"];
+				} catch (KeyNotFoundException) {
+					State = HsRobotState.FatalError;
+					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+				}
+			}
 		}
 
 		public async Task AttemptConnect(string ip = null, bool skipStateCheck = false) {
@@ -54,8 +79,8 @@ namespace HSPI_IRobot {
 			
 			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.Ok, "Connecting");
 
-			string lastKnownIp = HsDevice.PlugExtraData["lastknownip"];
-			string connectIp = ip ?? lastKnownIp;
+			string lastKnownIp = HsDevice.PlugExtraData.ContainsNamed("lastknownip") ? HsDevice.PlugExtraData["lastknownip"] : null;
+			string connectIp = ip ?? lastKnownIp ?? "127.0.0.1";
 			
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
@@ -362,7 +387,8 @@ namespace HSPI_IRobot {
 			Connecting,
 			Connected,
 			Disconnected,
-			CannotConnect
+			CannotConnect,
+			FatalError
 		}
 
 		public enum HsRobotCannotConnectReason {
