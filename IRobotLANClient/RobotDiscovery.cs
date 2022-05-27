@@ -12,6 +12,23 @@ namespace IRobotLANClient {
 		public event EventHandler<DiscoveredRobot> OnRobotDiscovered;
 		public List<DiscoveredRobot> DiscoveredRobots = new List<DiscoveredRobot>();
 
+		private readonly byte[] _discoveryPacket = Encoding.UTF8.GetBytes("irobotmcs");
+		private const short DiscoveryPort = 5678;
+
+		public async Task<DiscoveredRobot> GetRobotPublicDetails(string address) {
+			using (UdpClient client = new UdpClient()) {
+				client.Client.ReceiveTimeout = 5000;
+
+				try {
+					client.Connect(IPAddress.Parse(address), DiscoveryPort);
+					await client.SendAsync(_discoveryPacket, _discoveryPacket.Length);
+					return _parseRobot((await client.ReceiveAsync()).Buffer);
+				} catch (Exception) {
+					return null;
+				}
+			}
+		}
+
 		public void Discover() {
 			foreach (NetworkInterface iface in NetworkInterface.GetAllNetworkInterfaces()) {
 				if (iface.OperationalStatus != OperationalStatus.Up) {
@@ -40,11 +57,10 @@ namespace IRobotLANClient {
 
 					bool disposed = false;
 					
-					byte[] request = Encoding.UTF8.GetBytes("irobotmcs");
 					DateTime startTime = DateTime.Now;
 					Task.Run(async () => {
 						while (!disposed && DateTime.Now.Subtract(startTime).TotalSeconds <= 4) {
-							client.Send(request, request.Length, new IPEndPoint(broadcastAddress, 5678));
+							client.Send(_discoveryPacket, _discoveryPacket.Length, new IPEndPoint(broadcastAddress, DiscoveryPort));
 							await Task.Delay(1000);
 						}
 					});
@@ -54,34 +70,11 @@ namespace IRobotLANClient {
 							while (true) {
 								IPEndPoint from = new IPEndPoint(0, 0);
 								byte[] receiveBuffer = client.Receive(ref from);
-								JObject payload = JObject.Parse(Encoding.UTF8.GetString(receiveBuffer));
-								int.TryParse((string) payload.SelectToken("ver"), out int versionNumber);
 
-								string blid = (string) payload.SelectToken("robotid");
-								string hostname = (string) payload.SelectToken("hostname");
-								if (blid == null && hostname == null) {
-									continue; // malformed, apparently
-								}
-								
-								if (blid == null) {
-									blid = hostname.Split('-')[1];
-								}
-
-								if (DiscoveredRobots.Exists(r => r.Blid == blid)) {
-									// We already discovered this robot
+								DiscoveredRobot robotMetadata = _parseRobot(receiveBuffer);
+								if (robotMetadata == null || DiscoveredRobots.Exists(r => r.Blid == robotMetadata.Blid)) {
 									continue;
 								}
-								
-								DiscoveredRobot robotMetadata = new DiscoveredRobot {
-									Version = versionNumber,
-									Hostname = hostname,
-									RobotName = (string) payload.SelectToken("robotname"),
-									Blid = blid,
-									IpAddress = (string) payload.SelectToken("ip"),
-									MacAddress = (string) payload.SelectToken("mac"),
-									SoftwareVersion = (string) payload.SelectToken("sw"),
-									Sku = (string) payload.SelectToken("sku")
-								};
 
 								DiscoveredRobots.Add(robotMetadata);
 								OnRobotDiscovered?.Invoke(this, robotMetadata);
@@ -94,6 +87,32 @@ namespace IRobotLANClient {
 					});
 				}
 			}
+		}
+
+		private DiscoveredRobot _parseRobot(byte[] receiveBuffer) {
+			JObject payload = JObject.Parse(Encoding.UTF8.GetString(receiveBuffer));
+			int.TryParse((string) payload.SelectToken("ver"), out int versionNumber);
+
+			string blid = (string) payload.SelectToken("robotid");
+			string hostname = (string) payload.SelectToken("hostname");
+			if (blid == null && hostname == null) {
+				return null; // malformed, apparently
+			}
+								
+			if (blid == null) {
+				blid = hostname.Split('-')[1];
+			}
+
+			return new DiscoveredRobot {
+				Version = versionNumber,
+				Hostname = hostname,
+				RobotName = (string) payload.SelectToken("robotname"),
+				Blid = blid,
+				IpAddress = (string) payload.SelectToken("ip"),
+				MacAddress = (string) payload.SelectToken("mac"),
+				SoftwareVersion = (string) payload.SelectToken("sw"),
+				Sku = (string) payload.SelectToken("sku")
+			};
 		}
 
 		public class DiscoveredRobot {

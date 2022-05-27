@@ -14,10 +14,14 @@
 			.irobot-table-header>div {
 				font-weight: 900;
 			}
-			
+
 			.irobot-table-body .btn-link {
 				padding: 0;
-				margin-right: 5px;
+				margin: 0 5px 0 0;
+			}
+
+			.irobot-table-body .row:hover {
+				background-color: #f6f6f6;
 			}
 			
 			#btn-cloudlogin {
@@ -51,7 +55,7 @@
 		<div class="container">
 			<div class="streakhs grey lighten-2">Robots</div>
 			
-			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header robots-table-header d-none d-sm-flex">
+			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 				<div class="col-3">Name</div>
 				<div class="col-3">Address</div>
 				<div class="col-3">Status</div>
@@ -64,7 +68,7 @@
 			<div class="streakhs grey lighten-2">Other Robots on Network</div>
 			
 			<div id="discovered-robots-table-outer" style="display: none">
-				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header discovered-robots-table-header d-none d-sm-flex">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 					<div class="col-3">Name</div>
 					<div class="col-3">Address</div>
 					<div class="col-3">Model</div>
@@ -103,7 +107,7 @@
 			<p id="cloud-login-error" class="hs-bg-red-4 p-1" style="display: none"></p>
 			
 			<div id="cloud-robots-table-outer" style="display: none">
-				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header cloud-robots-table-header d-none d-sm-flex">
+				<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 					<div class="col-3">Name</div>
 					<div class="col-3">Address</div>
 					<div class="col-3">Model</div>
@@ -115,8 +119,9 @@
 			
 			<!-- Support -->
 			<div class="streakhs grey lighten-2">Support</div>
-			<a href="https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay/1544987-irobot-hs4-plugin-manual" class="btn btn-cancel" target="_blank">iRobot HS4 Plugin Manual</a>
+			<a href="https://github.com/DoctorMcKay/HSPI_IRobot/wiki" class="btn btn-cancel" target="_blank">iRobot HS4 Plugin Manual</a>
 			<a href="https://forums.homeseer.com/forum/hs4-products/hs4-plugins/robotics-plug-ins-aa/irobot-dr-mckay" class="btn btn-cancel" target="_blank">Support</a>
+			<a href="https://github.com/sponsors/DoctorMcKay" class="btn btn-cancel" target="_blank">Support Future Development</a>
 			<button type="button" id="btn-debugreport" class="btn btn-cancel">Send Debug Report</button>
 			<p id="debug-report-output"></p>
 		</div>
@@ -188,9 +193,9 @@
 							<input type="text" id="add-robot-password" class="form-control" />
 							<label for="add-robot-password" id="add-robot-password-label">Robot Password</label>
 						</div>
+
+						<p id="add-robot-error" class="hs-bg-red-4 p-1" style="display: none"></p>
 					</div>
-					
-					<p id="add-robot-error" class="hs-bg-red-4 p-1" style="display: none"></i>
 					
 					<div class="modal-footer">
 						<button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
@@ -199,26 +204,27 @@
 				</div>
 			</div>
 		</div>
+	
+		<!-- Generic confirm modal -->
+		<div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">Confirm</h4>
+					</div>
+					
+					<div class="modal-body" id="confirm-modal-body"></div>
+					
+					<div class="modal-footer">
+						<button type="button" class="btn btn-cancel" data-dismiss="modal">Cancel</button>
+						<button id="btn-confirmmodalconfirm" type="button" class="btn btn-danger"></button>
+					</div>
+				</div>
+			</div>
+		</div>
 		
 		{{includefile 'bootstrap/js/page_common.js'}}
-		<script>
-			function fatalPageError(message) {
-				let $div = $('<div class="card mt-2" />');
-				$('.container').html($div);
-				
-				let $div2 = $('<div class="row" />');
-				$div.html($div2);
-				
-				$div = $div2;
-				$div2 = $('<div class="col text-center" />');
-				$div2.text(message);
-				$div.html($div2);
-			}
-			
-			if (!window.Promise) {
-				fatalPageError('Your browser is too old to use this page. Please use a modern browser.');
-			}
-		</script>
+		<script src="/iRobot/common.js"></script>
 		<script>
 			(async function() {
 				let g_AutoDiscoveryInterval = null;
@@ -239,7 +245,7 @@
 					$('#robot-full-status').val(JSON.stringify(status, undefined, '\t')).show();
 				});
 				$('#btn-debugreport').click(async function() {
-					let confirmed = confirm('Send a debug report? This will send all of your robots\' data to the plugin author.');
+					let {confirmed} = await confirmModal('Send a debug report? This will send all of your robots\' data and plugin log to the plugin author.', 'Send Debug Report');
 					if (!confirmed) {
 						return;
 					}
@@ -252,10 +258,15 @@
 				
 				// The page has just loaded. Get our robot list.
 				printRobotTable();
-				setInterval(printRobotTable, 5000);
+				setInterval(printRobotTable, 1000);
 				
 				async function printRobotTable() {
 					let {robots} = await ajaxCmd('getRobots');
+					if (isObjectIdentical(robots, g_ActiveRobots)) {
+						return;
+					}
+					
+					console.log('Robot list changed');
 					g_ActiveRobots = robots;
 					
 					let $tableBody = $('#robots-table-body');
@@ -298,7 +309,10 @@
 						
 						$btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(async () => {
-							let confirmed = confirm(`Are you sure you want to delete "${robot.name}"? All HS devices associated with this robot will be deleted and cannot be recovered.`);
+							let {confirmed} = await confirmModal([
+								`Are you sure you want to delete <b>${robot.name}</b>?`,
+								'All HomeSeer devices associated with this robot will be deleted and cannot be recovered.'
+							], 'Delete Robot');
 							if (!confirmed) {
 								return;
 							}
@@ -397,7 +411,7 @@
 						if (result.error == 'Invalid cmd') {
 							// Login still in process
 							
-							if (Date.now() - startTime > 5000) {
+							if (Date.now() - startTime > 10000) {
 								complete('Login request timed out');
 							} else {
 								setTimeout(checkCloud, 500);
@@ -547,7 +561,13 @@
 						let robots = [];
 						
 						g_AutoDiscoveryInterval = setTimeout(async function discovery() {
-							let {discoveredRobots} = await ajaxCmd('autodiscoverResult');
+							let {error, discoveredRobots} = await ajaxCmd('autodiscoverResult');
+							if (error == 'Invalid cmd') {
+								// Nothing discovered yet
+								setTimeout(discovery, 500);
+								return;
+							}
+							
 							discoveredRobots.filter(r => !seenRobots[r.Blid]).forEach((robot) => {
 								seenRobots[robot.Blid] = true;
 								robots.push(robot);
@@ -560,36 +580,6 @@
 								// Discovery is done
 								resolve(robots);
 							}
-						});
-					});
-				}
-				
-				function ajaxCmd(cmd, body) {
-					body = body || {};
-					body.cmd = cmd;
-					
-					return new Promise((resolve, reject) => {
-						let xhr = new XMLHttpRequest();
-						xhr.open('POST', '/iRobot/robots.html');
-						xhr.setRequestHeader('Content-Type', 'application/json');
-						xhr.send(JSON.stringify(body));
-						
-						xhr.addEventListener('readystatechange', function() {
-							if (xhr.readyState != XMLHttpRequest.DONE) {
-								return;
-							}
-							
-							if (xhr.status != 200) {
-								return reject(new Error('HTTP error ' + xhr.status));
-							}
-							
-							let response = JSON.parse(xhr.responseText);
-							if (response.error && response.fatal) {
-								fatalPageError(response.error);
-								return;
-							}
-							
-							resolve(response);
 						});
 					});
 				}

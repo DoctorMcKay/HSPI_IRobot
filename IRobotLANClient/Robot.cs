@@ -17,6 +17,7 @@ namespace IRobotLANClient {
 	public abstract class Robot {
 		public bool Connected { get; private set; }
 		public JObject ReportedState { get; private set; } = new JObject();
+		public JObject LastJobStartCommand { get; private set; } = null;
 		public string Name { get; private set; }
 		public string Sku { get; private set; }
 		public byte BatteryLevel { get; private set; }
@@ -97,7 +98,7 @@ namespace IRobotLANClient {
 			try {
 				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
 				connectTimeout.Stop();
-				
+
 				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
 				// but let's subscribe anyway just to be a good citizen
 				await MqttClient.SubscribeAsync(MqttStatusTopic);
@@ -106,6 +107,22 @@ namespace IRobotLANClient {
 				return result;
 			} catch (OperationCanceledException) {
 				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
+			} catch (Exception ex) {
+				for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
+					if (checkException.Message.Contains("BadUserNameOrPassword")) {
+						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
+					}
+
+					if (checkException.Message.Contains("actively refused it")) {
+						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
+					}
+
+					if (checkException.Message.Contains("timed out")) {
+						throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
+					}
+				}
+				
+				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 			}
 		}
 
@@ -121,6 +138,10 @@ namespace IRobotLANClient {
 
 		public void Clean() {
 			SendCommand("start");
+		}
+
+		public void CleanCustom(JObject command) {
+			SendCommand("start", command);
 		}
 
 		public void Stop() {
@@ -147,18 +168,17 @@ namespace IRobotLANClient {
 			SendCommand("train");
 		}
 
-		protected async void SendCommand(string command) {
+		protected async void SendCommand(string command, JObject commandParams = null) {
 			DateTime unixEpoch = new DateTime(1970, 1, 1);
 
-			string payload = JsonConvert.SerializeObject(new {
-				command,
-				time = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds,
-				initiator = "localApp"
-			});
+			JObject cmd = commandParams != null ? (JObject) commandParams.DeepClone() : new JObject();
+			cmd["command"] = command;
+			cmd["time"] = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds;
+			cmd["initiator"] = "localApp";
 
-			MqttApplicationMessage msg = new MqttApplicationMessage() {
+			MqttApplicationMessage msg = new MqttApplicationMessage {
 				Topic = "cmd",
-				Payload = Encoding.UTF8.GetBytes(payload)
+				Payload = Encoding.UTF8.GetBytes(cmd.ToString())
 			};
 
 			try {
@@ -331,6 +351,10 @@ namespace IRobotLANClient {
 			ErrorCode = (int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0);
 			NotReadyCode = (int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0);
 			CanLearnMaps = (bool) (ReportedState.SelectToken("pmapLearningAllowed") ?? false);
+
+			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
+				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
+			}
 			
 			HandleRobotStateUpdate();
 			

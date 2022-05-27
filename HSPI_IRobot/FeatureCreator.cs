@@ -10,8 +10,8 @@ namespace HSPI_IRobot {
 		private HSPI _plugin;
 		private HsDevice _device;
 
-		public FeatureCreator(HSPI plugin, HsDevice device) {
-			_plugin = plugin;
+		public FeatureCreator(HsDevice device) {
+			_plugin = HSPI.Instance;
 			_device = device;
 		}
 

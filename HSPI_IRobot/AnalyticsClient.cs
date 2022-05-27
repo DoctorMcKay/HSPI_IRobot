@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
@@ -31,10 +34,12 @@ namespace HSPI_IRobot {
 
 		private readonly HSPI _plugin;
 		private readonly IHsController _hs;
+		private readonly LinkedList<object> _log;
 
 		public AnalyticsClient(HSPI plugin, IHsController hs) {
 			_plugin = plugin;
 			_hs = hs;
+			_log = new LinkedList<object>();
 
 			if (!Debugger.IsAttached) {
 				AppDomain.CurrentDomain.UnhandledException += (_, args) => {
@@ -105,6 +110,20 @@ namespace HSPI_IRobot {
 			}
 		}
 
+		public void WriteLog(ELogType type, string message, int lineNumber, string caller) {
+			_log.AddLast(new LogLine {
+				Type = type.ToString(),
+				Message = message,
+				LineNumber = lineNumber,
+				Caller = caller,
+				Timestamp = DateTime.Now.ToString(CultureInfo.InvariantCulture)
+			});
+			
+			while (_log.Count > 500) {
+				_log.RemoveFirst();
+			}
+		}
+
 		public async Task<DebugReportResponse> DebugReport(object report) {
 			try {
 				ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
@@ -112,6 +131,7 @@ namespace HSPI_IRobot {
 				using (HttpClient client = new HttpClient()) {
 					string jsonReport = JsonConvert.SerializeObject(new {
 						AnalyticsData = _gatherData(),
+						Log = _log.ToArray(),
 						DebugReport = report
 					});
 
@@ -162,6 +182,14 @@ namespace HSPI_IRobot {
 			public string HsAppPath;
 			public int HsOsType;
 			public int HsEdition;
+		}
+
+		private struct LogLine {
+			public string Type;
+			public string Message;
+			public int LineNumber;
+			public string Caller;
+			public string Timestamp;
 		}
 
 		public class DebugReportResponse {

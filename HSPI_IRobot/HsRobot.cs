@@ -1,12 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
-using System.Timers;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.FeaturePageHandlers;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HsRobot {
@@ -33,12 +38,37 @@ namespace HSPI_IRobot {
 		public event EventHandler OnConnectStateUpdated;
 		public event EventHandler OnRobotStatusUpdated;
 
-		public HsRobot(HSPI plugin, HsDevice hsDevice) {
-			_plugin = plugin;
+		public HsRobot(HsDevice hsDevice) {
+			_plugin = HSPI.Instance;
 			HsDevice = hsDevice;
-			Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
-			Blid = HsDevice.PlugExtraData["blid"];
-			Password = HsDevice.PlugExtraData["password"];
+
+			try {
+				Type = HsDevice.PlugExtraData["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+				Blid = HsDevice.PlugExtraData["blid"];
+				Password = HsDevice.PlugExtraData["password"];
+				
+				_plugin.BackupPlugExtraData(hsDevice);
+			} catch (KeyNotFoundException) {
+				_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is corrupt. Attempting automatic repair.");
+				if (!_plugin.RestorePlugExtraData(hsDevice)) {
+					State = HsRobotState.FatalError;
+					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+					return;
+				}
+				
+				// Try to init again
+				try {
+					PlugExtraData ped = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(hsDevice.Ref, EProperty.PlugExtraData);
+					Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+					Blid = ped["blid"];
+					Password = ped["password"];
+				} catch (KeyNotFoundException) {
+					State = HsRobotState.FatalError;
+					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
+					_plugin.WriteLog(ELogType.Error, $"HS4 device {hsDevice.Name} is irreparably corrupt. Delete and re-add the robot.");
+				}
+			}
 		}
 
 		public async Task AttemptConnect(string ip = null, bool skipStateCheck = false) {
@@ -49,8 +79,8 @@ namespace HSPI_IRobot {
 			
 			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.Ok, "Connecting");
 
-			string lastKnownIp = HsDevice.PlugExtraData["lastknownip"];
-			string connectIp = ip ?? lastKnownIp;
+			string lastKnownIp = HsDevice.PlugExtraData.ContainsNamed("lastknownip") ? HsDevice.PlugExtraData["lastknownip"] : null;
+			string connectIp = ip ?? lastKnownIp ?? "127.0.0.1";
 			
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
@@ -74,11 +104,32 @@ namespace HSPI_IRobot {
 				string discoveredRobotIp = await FindRobot();
 				if (discoveredRobotIp == null || discoveredRobotIp == connectIp) {
 					// Either we couldn't discover the robot, or it has the same IP as we already tried
-					UpdateState(
-						HsRobotState.CannotConnect,
-						discoveredRobotIp == connectIp ? HsRobotCannotConnectReason.DiscoveredCannotConnect : HsRobotCannotConnectReason.CannotDiscover,
-						discoveredRobotIp == connectIp ? "Robot credentials are incorrect or another app is already connected" : "Robot was not found on the network"
-					);
+
+					HsRobotCannotConnectReason cannotConnectReason;
+					string stringState;
+
+					if (discoveredRobotIp == connectIp) {
+						// We discovered it, but can't connect
+						cannotConnectReason = HsRobotCannotConnectReason.DiscoveredCannotConnect;
+						if (ex is RobotConnectionException exception) {
+							_plugin.WriteLog(
+								exception.ConnectionError == ConnectionError.UnspecifiedError ? ELogType.Warning : ELogType.Debug,
+								$"Connection error for {Blid}: {exception.RecursiveMessage}"
+							);
+							
+							stringState = exception.FriendlyMessage;
+						} else {
+							_plugin.WriteLog(ELogType.Warning, $"Unspecified connection error type for {Blid}: {ex.Message}");
+							stringState = ex.Message;
+						}
+					} else {
+						// Not discovered
+						_plugin.WriteLog(ELogType.Debug, $"Connection error for {Blid}: not discovered on network");
+						cannotConnectReason = HsRobotCannotConnectReason.CannotDiscover;
+						stringState = "Not found on the network";
+					}
+
+					UpdateState(HsRobotState.CannotConnect, cannotConnectReason, stringState);
 					EnqueueReconnectAttempt();
 					return;
 				}
@@ -166,6 +217,11 @@ namespace HSPI_IRobot {
 		}
 
 		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
+			_plugin.WriteLog(
+				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
+				$"Robot {Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
+			);
+			
 			State = state;
 			CannotConnectReason = cannotConnectReason;
 			StateString = stateString;
@@ -255,15 +311,19 @@ namespace HSPI_IRobot {
 			HsFeature feature = _plugin.GetHsController().GetFeatureByAddress($"{Blid}:{type}");
 			if (feature == null) {
 				_plugin.WriteLog(ELogType.Warning, $"Missing feature {type} for robot {Blid}; creating it");
-				FeatureCreator creator = new FeatureCreator(_plugin, HsDevice);
+				FeatureCreator creator = new FeatureCreator(HsDevice);
 				feature = _plugin.GetHsController().GetFeatureByRef(creator.CreateFeature(type));
 			}
 			_features.Add(type, feature);
 
-			FeatureUpdater updater = new FeatureUpdater(_plugin);
+			FeatureUpdater updater = new FeatureUpdater();
 			updater.ExecuteFeatureUpdates(feature);
 			
 			return feature;
+		}
+
+		public double GetFeatureValue(FeatureType type) {
+			return (double) _plugin.GetHsController().GetPropertyByRef(GetFeature(type).Ref, EProperty.Value);
 		}
 
 		public string GetName() {
@@ -275,11 +335,60 @@ namespace HSPI_IRobot {
 			return device.Name;
 		}
 
+		public bool IsNavigating() {
+			// Check whether we're navigating *based on HS feature status*
+			if (
+				!Enum.TryParse(GetFeatureValue(FeatureType.Status).ToString(CultureInfo.InvariantCulture), out RobotStatus cycle)
+				|| !Enum.TryParse(GetFeatureValue(FeatureType.JobPhase).ToString(CultureInfo.InvariantCulture), out CleanJobPhase phase)
+			) {
+				_plugin.WriteLog(ELogType.Warning, $"Unable to parse {Blid} status ({GetFeatureValue(FeatureType.Status)}) or phase ({GetFeatureValue(FeatureType.JobPhase)})");
+				return false;
+			}
+			
+			return new[] {RobotStatus.Clean, RobotStatus.DockManually, RobotStatus.Train}.Contains(cycle)
+			       && new[] {CleanJobPhase.Cleaning, CleanJobPhase.LowBatteryReturningToDock, CleanJobPhase.DoneReturningToDock}.Contains(phase);
+		}
+
+		public List<FavoriteJobs.FavoriteJob> GetFavoriteJobs() {
+			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
+			return !extraData.ContainsNamed("favoritejobs")
+				? new List<FavoriteJobs.FavoriteJob>()
+				: JArray.Parse(extraData["favoritejobs"]).Select(token => token.ToObject<FavoriteJobs.FavoriteJob>()).ToList();
+		}
+
+		public void SaveFavoriteJobs(List<FavoriteJobs.FavoriteJob> favorites) {
+			PlugExtraData extraData = (PlugExtraData) _plugin.GetHsController().GetPropertyByRef(HsDevice.Ref, EProperty.PlugExtraData);
+			string serializedFavorites = JsonConvert.SerializeObject(favorites);
+			
+			if (!extraData.ContainsNamed("favoritejobs")) {
+				extraData.AddNamed("favoritejobs", serializedFavorites);
+			} else {
+				extraData["favoritejobs"] = serializedFavorites;
+			}
+			
+			_plugin.GetHsController().UpdatePropertyByRef(HsDevice.Ref, EProperty.PlugExtraData, extraData);
+		}
+
+		public bool StartFavoriteJob(string jobName) {
+			if (Robot == null || State != HsRobotState.Connected) {
+				return false;
+			}
+			
+			FavoriteJobs.FavoriteJob favorite = GetFavoriteJobs().Find(job => job.Name == jobName);
+			if (favorite.Equals(default(FavoriteJobs.FavoriteJob))) {
+				return false;
+			}
+			
+			Robot.CleanCustom(favorite.Command);
+			return true;
+		}
+
 		public enum HsRobotState {
 			Connecting,
 			Connected,
 			Disconnected,
-			CannotConnect
+			CannotConnect,
+			FatalError
 		}
 
 		public enum HsRobotCannotConnectReason {
