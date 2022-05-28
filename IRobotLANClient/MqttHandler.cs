@@ -40,12 +40,14 @@ namespace IRobotLANClient {
 			return Task.CompletedTask;
 		}
 
-		public async Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs eventArgs) {
+		public Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs eventArgs) {
 			try {
-				await _robot.ApplicationMessageReceived(eventArgs.ApplicationMessage);
+				_robot.ApplicationMessageReceived(eventArgs.ApplicationMessage);
 			} catch (Exception ex) {
 				_exceptionSource.SetResult(ex);
 			}
+
+			return Task.CompletedTask;
 		}
 	}
 }

@@ -192,7 +192,7 @@ namespace IRobotLANClient {
 			}
 		}
 
-		internal async Task ApplicationMessageReceived(MqttApplicationMessage msg) {
+		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
 			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
@@ -235,9 +235,11 @@ namespace IRobotLANClient {
 				_awaitingFirstReport = false;
 				_awaitingFirstReportTimer = true;
 
-				await Task.Delay(1000);
-
-				_awaitingFirstReportTimer = false;
+				Task.Run(async () => {
+					await Task.Delay(1000);
+					_awaitingFirstReportTimer = false;
+					ProcessStateUpdate();
+				});
 			}
 
 			if (!_awaitingFirstReportTimer) {
