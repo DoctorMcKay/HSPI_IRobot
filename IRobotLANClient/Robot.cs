@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using IRobotLANClient.Enums;
+using IRobotLANClient.JsonObjects;
 using MQTTnet.Client;
 using MQTTnet;
 using MQTTnet.Client.Connecting;
@@ -43,7 +44,7 @@ namespace IRobotLANClient {
 
 		private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 		private bool _awaitingFirstReport;
-		private Timer _startupTimer;
+		private bool _awaitingFirstReportTimer;
 		private DateTime _connectedTime;
 
 		public Robot(string address, string blid, string password) {
@@ -191,7 +192,7 @@ namespace IRobotLANClient {
 			}
 		}
 
-		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
+		internal async Task ApplicationMessageReceived(MqttApplicationMessage msg) {
 			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
 			JObject payload = JObject.Parse(jsonPayload);
 
@@ -208,7 +209,6 @@ namespace IRobotLANClient {
 			}
 
 			// This is a robot status update
-
 			JObject stateUpdate = (JObject) payload.SelectToken("state.reported");
 			if (stateUpdate == null) {
 				// This shouldn't ordinarily happen, but in case it does...
@@ -233,30 +233,25 @@ namespace IRobotLANClient {
 			if (_awaitingFirstReport) {
 				DebugOutput($"Received first report after {DateTime.Now.Subtract(_connectedTime).TotalMilliseconds} ms");
 				_awaitingFirstReport = false;
-				
-				_startupTimer = new Timer {
-					AutoReset = false,
-					Enabled = true,
-					Interval = 1000
-				};
+				_awaitingFirstReportTimer = true;
 
-				_startupTimer.Elapsed += (sender, args) => {
-					_startupTimer = null;
-					ProcessStateUpdate();
-				};
+				await Task.Delay(1000);
+
+				_awaitingFirstReportTimer = false;
 			}
 
-			if (_startupTimer == null) {
+			if (!_awaitingFirstReportTimer) {
 				ProcessStateUpdate();
 			}
 		}
 		
 		private void ProcessStateUpdate() {
-			Name = (string) (ReportedState.SelectToken("name") ?? "");
-			Sku = (string) (ReportedState.SelectToken("sku") ?? "");
-			BatteryLevel = (byte) (ReportedState.SelectToken("batPct") ?? 0);
-			ChildLock = (bool) (ReportedState.SelectToken("childLock") ?? JToken.FromObject(false));
-				
+			ReportedState state = JsonConvert.DeserializeObject<ReportedState>(ReportedState.ToString());
+			Name = state.Name;
+			Sku = state.Sku;
+			BatteryLevel = state.BatPct;
+			ChildLock = state.ChildLock;
+
 #if DEBUG
 			/*
 			 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
@@ -275,8 +270,8 @@ namespace IRobotLANClient {
 			));
 #endif
 
-			string missionCycle = (string) (ReportedState.SelectToken("cleanMissionStatus.cycle") ?? "none");
-			string missionPhase = (string) (ReportedState.SelectToken("cleanMissionStatus.phase") ?? "stop");
+			string missionCycle = state.CleanMissionStatus?.Cycle ?? "none";
+			string missionPhase = state.CleanMissionStatus?.Phase ?? "stop";
 
 			switch (missionCycle) {
 				case "none":
@@ -351,10 +346,10 @@ namespace IRobotLANClient {
 					Phase = MissionPhase.Unknown;
 					break;
 			}
-				
-			ErrorCode = (int) (ReportedState.SelectToken("cleanMissionStatus.error") ?? 0);
-			NotReadyCode = (int) (ReportedState.SelectToken("cleanMissionStatus.notReady") ?? 0);
-			CanLearnMaps = (bool) (ReportedState.SelectToken("pmapLearningAllowed") ?? false);
+
+			ErrorCode = state.CleanMissionStatus?.Error ?? 0;
+			NotReadyCode = state.CleanMissionStatus?.NotReady ?? 0;
+			CanLearnMaps = state.PmapLearningAllowed;
 
 			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
 				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
