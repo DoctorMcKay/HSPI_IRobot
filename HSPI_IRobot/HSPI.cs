@@ -423,7 +423,7 @@ namespace HSPI_IRobot {
 
 				if (robotType == RobotType.Unrecognized) {
 					WriteLog(ELogType.Debug, "Unrecognized robot type");
-					WriteLog(ELogType.Debug, verifier.ReportedState.ToString());
+					WriteLog(ELogType.Debug, JsonConvert.SerializeObject(verifier.ReportedState));
 					return "Unrecognized robot type";
 				}
 
@@ -437,6 +437,7 @@ namespace HSPI_IRobot {
 				}
 
 				WriteLog(ELogType.Error, $"Robot verification timed out for {blid}");
+				WriteLog(ELogType.Debug, JsonConvert.SerializeObject(verifier?.ReportedState));
 				return "Robot verification timed out";
 			} catch (RobotConnectionException ex) {
 				RobotDiscovery.DiscoveredRobot robotMetadata = await new RobotDiscovery().GetRobotPublicDetails(ip);
