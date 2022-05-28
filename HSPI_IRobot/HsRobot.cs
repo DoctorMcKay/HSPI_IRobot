@@ -396,6 +396,10 @@ namespace HSPI_IRobot {
 				return false;
 			}
 			
+			foreach (JProperty prop in favorite.Command.Properties().Where(prop => prop.Value.Type == JTokenType.Null).ToArray()) {
+				favorite.Command.Remove(prop.Name);
+			}
+
 			Robot.CleanCustom(favorite.Command);
 			return true;
 		}
