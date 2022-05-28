@@ -172,6 +172,10 @@ namespace IRobotLANClient {
 			SendCommand("train");
 		}
 
+		public void Reboot() {
+			SendCommand("reset");
+		}
+
 		protected async void SendCommand(string command, JObject commandParams = null) {
 			DateTime unixEpoch = new DateTime(1970, 1, 1);
 
@@ -182,7 +186,7 @@ namespace IRobotLANClient {
 
 			MqttApplicationMessage msg = new MqttApplicationMessage {
 				Topic = "cmd",
-				Payload = Encoding.UTF8.GetBytes(cmd.ToString())
+				Payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(cmd))
 			};
 
 			try {
