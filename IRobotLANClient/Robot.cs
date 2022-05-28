@@ -44,6 +44,7 @@ namespace IRobotLANClient {
 		private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 		private bool _awaitingFirstReport;
 		private Timer _startupTimer;
+		private DateTime _connectedTime;
 
 		public Robot(string address, string blid, string password) {
 			Connected = false;
@@ -98,6 +99,8 @@ namespace IRobotLANClient {
 			try {
 				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
 				connectTimeout.Stop();
+				
+				_connectedTime = DateTime.Now;
 
 				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
 				// but let's subscribe anyway just to be a good citizen
@@ -228,6 +231,7 @@ namespace IRobotLANClient {
 			// after receiving the first report for additional reports to come in.
 
 			if (_awaitingFirstReport) {
+				DebugOutput($"Received first report after {DateTime.Now.Subtract(_connectedTime).TotalMilliseconds} ms");
 				_awaitingFirstReport = false;
 				
 				_startupTimer = new Timer {

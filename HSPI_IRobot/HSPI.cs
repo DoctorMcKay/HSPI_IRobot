@@ -406,11 +406,20 @@ namespace HSPI_IRobot {
 
 		public async Task<string> AddNewRobot(string ip, string blid, string password) {
 			// First things first, let's try to connect and see if we can
+			RobotVerifier verifier = null;
 			try {
-				RobotVerifier verifier = new RobotVerifier(ip, blid, password);
+				WriteLog(ELogType.Debug, $"Adding new robot with IP {ip} and BLID {blid}");
+
+				verifier = new RobotVerifier(ip, blid, password);
+				verifier.OnDebugOutput += (sender, args) => WriteLog(ELogType.Debug, $"[V:{blid}] {args.Output}");
 				await verifier.Connect();
+
+				WriteLog(ELogType.Debug, $"Verifier for {blid} connected");
+
 				RobotType robotType = await verifier.WaitForDetectedType();
+				WriteLog(ELogType.Debug, $"Verifier for {blid} detected type as {robotType}");
 				await verifier.Disconnect();
+				WriteLog(ELogType.Debug, $"Disconnected from {blid} verifier");
 
 				if (robotType == RobotType.Unrecognized) {
 					WriteLog(ELogType.Debug, "Unrecognized robot type");
@@ -422,6 +431,13 @@ namespace HSPI_IRobot {
 				timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
 
 				return "OK";
+			} catch (TaskCanceledException) {
+				if (verifier != null && verifier.Connected) {
+					await verifier.Disconnect();
+				}
+
+				WriteLog(ELogType.Error, $"Robot verification timed out for {blid}");
+				return "Robot verification timed out";
 			} catch (RobotConnectionException ex) {
 				RobotDiscovery.DiscoveredRobot robotMetadata = await new RobotDiscovery().GetRobotPublicDetails(ip);
 				if (robotMetadata == null) {

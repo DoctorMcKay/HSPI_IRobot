@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using IRobotLANClient.Enums;
+using System.Timers;
 
 namespace IRobotLANClient {
 	public class RobotVerifier : Robot {
@@ -24,11 +25,15 @@ namespace IRobotLANClient {
 				DetectedType = RobotType.Mop;
 			}
 
-			_taskCompletionSource.SetResult(DetectedType);
+			_taskCompletionSource.TrySetResult(DetectedType);
 		}
 
 		public Task<RobotType> WaitForDetectedType() {
 			_taskCompletionSource = new TaskCompletionSource<RobotType>();
+
+			Timer timeout = new Timer {Enabled = true, AutoReset = false, Interval = 10000};
+			timeout.Elapsed += (sender, args) => _taskCompletionSource.TrySetCanceled();
+
 			return _taskCompletionSource.Task;
 		}
 	}
