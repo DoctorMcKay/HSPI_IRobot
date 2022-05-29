@@ -79,7 +79,7 @@ namespace HSPI_IRobot {
 			
 			// Set up event triggers and actions
 			TriggerTypes.AddTriggerType(typeof(RobotTrigger));
-			ActionTypes.AddActionType(typeof(StartFavoriteJobAction));
+			ActionTypes.AddActionType(typeof(RobotAction));
 			
 			_analyticsClient.ReportIn(5000);
 		}
