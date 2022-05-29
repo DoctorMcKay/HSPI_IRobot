@@ -292,6 +292,7 @@
 						$row.append($col);
 						
 						$col = $('<div class="col-sm-3" />');
+						// Info
 						let $btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(() => {
 							$('#robot-full-status').hide();
@@ -307,6 +308,17 @@
 						$btn.text('Info');
 						$col.append($btn);
 						
+						// Reboot
+						$btn = $('<button type="button" class="btn btn-link" />');
+						$btn.click(async function() {
+							await ajaxCmd('rebootRobot', {blid: robot.blid});
+							$(this).prop('disabled', true).text('Rebooting');
+						});
+						$btn.prop('disabled', robot.stateString != 'OK');
+						$btn.text('Reboot');
+						$col.append($btn);
+						
+						// Delete
 						$btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(async () => {
 							let {confirmed} = await confirmModal([

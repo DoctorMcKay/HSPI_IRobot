@@ -22,6 +22,9 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				case "getRobotFullStatus":
 					return _getRobotFullStatus((string) payload.SelectToken("blid"));
 				
+				case "rebootRobot":
+					return _rebootRobot((string) payload.SelectToken("blid"));
+				
 				case "cloudLogin":
 					return _cloudLogin((string) payload.SelectToken("username"), (string) payload.SelectToken("password"));
 				
@@ -85,6 +88,24 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			return robot == null
 				? ErrorResponse("Invalid blid")
 				: JsonConvert.SerializeObject(new {status = robot.Robot?.ReportedState});
+		}
+
+		private string _rebootRobot(string blid) {
+			if (blid == null) {
+				return BadCmdResponse;
+			}
+			
+			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
+			if (robot == null) {
+				return ErrorResponse("Invalid blid");
+			}
+
+			if (robot.Robot == null || !robot.Robot.Connected) {
+				return ErrorResponse("Not connected");
+			}
+			
+			robot.Robot.Reboot();
+			return SuccessResponse;
 		}
 
 		private string _cloudLogin(string username, string password) {
