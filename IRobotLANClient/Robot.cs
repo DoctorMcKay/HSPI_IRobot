@@ -22,6 +22,7 @@ namespace IRobotLANClient {
 		public string Name { get; private set; }
 		public string Sku { get; private set; }
 		public byte BatteryLevel { get; private set; }
+		public ChargeLightRingPattern ChargeLightRingPattern { get; private set; }
 		public bool ChildLock { get; private set; }
 		public MissionCycle Cycle { get; private set; }
 		public MissionPhase Phase { get; private set; }
@@ -191,6 +192,41 @@ namespace IRobotLANClient {
 
 			try {
 				await MqttClient.PublishAsync(msg, _cancellationTokenSource.Token);
+			} catch (Exception) {
+				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
+			}
+		}
+
+		public virtual bool SupportsConfigOption(ConfigOption option) {
+			// All of these checks are based on my limited vision into i7 and 890
+			switch (option) {
+				case ConfigOption.ChargeLightRingPattern:
+					return (int) (ReportedState.SelectToken("featureFlags.chrgLrPtrnEnable") ?? JToken.FromObject(0)) == 1;
+				
+				case ConfigOption.ChildLock:
+					return (int) (ReportedState.SelectToken("featureFlags.childLockEnable") ?? JToken.FromObject(0)) == 1;
+				
+				default:
+					return false;
+			}
+		}
+
+		public void SetChargeLightRingPattern(ChargeLightRingPattern pattern) {
+			UpdateOption(new {chrgLrPtrn = (int) pattern});
+		}
+
+		public void SetChildLock(bool childLock) {
+			UpdateOption(new {childLock});
+		}
+
+		protected void UpdateOption(object request) {
+			MqttApplicationMessage msg = new MqttApplicationMessage {
+				Topic = "delta",
+				Payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new {state = request}))
+			};
+
+			try {
+				MqttClient.PublishAsync(msg, _cancellationTokenSource.Token).Wait();
 			} catch (Exception) {
 				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
 			}

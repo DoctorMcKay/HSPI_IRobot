@@ -63,6 +63,10 @@
         <Compile Include="FeaturePageHandlers\ManageRobots.cs" />
         <Compile Include="FeatureUpdater.cs" />
         <Compile Include="HsEvents\RobotAction.cs" />
+        <Compile Include="HsEvents\RobotActions\AbstractRobotAction.cs" />
+        <Compile Include="HsEvents\RobotActions\ChangeSetting.cs" />
+        <Compile Include="HsEvents\RobotActions\RebootRobot.cs" />
+        <Compile Include="HsEvents\RobotActions\StartFavoriteJob.cs" />
         <Compile Include="HsEvents\RobotTrigger.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />

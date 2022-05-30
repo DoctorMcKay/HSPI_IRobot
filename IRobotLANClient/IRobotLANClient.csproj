@@ -45,6 +45,9 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="Enums\BinStatus.cs" />
+        <Compile Include="Enums\ChargeLightRingPattern.cs" />
+        <Compile Include="Enums\CleaningPassMode.cs" />
+        <Compile Include="Enums\ConfigOption.cs" />
         <Compile Include="Enums\ConnectionError.cs" />
         <Compile Include="Enums\MissionCycle.cs" />
         <Compile Include="Enums\MissionPhase.cs" />
@@ -53,6 +56,8 @@
         <Compile Include="Enums\TankStatus.cs" />
         <Compile Include="JsonCompare.cs" />
         <Compile Include="JsonObjects\ReportedState.cs" />
+        <Compile Include="JsonObjects\ReportedStateMop.cs" />
+        <Compile Include="JsonObjects\ReportedStateVacuum.cs" />
         <Compile Include="MqttHandler.cs" />
         <Compile Include="Robot.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />

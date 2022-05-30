@@ -1,11 +1,15 @@
 ﻿using System;
 using IRobotLANClient.Enums;
+using IRobotLANClient.JsonObjects;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
 	public class RobotMop : Robot {
 		public TankStatus TankStatus { get; private set; }
 		public MopPadType MopPadType { get; private set; }
+		public byte WetMopPadWetness { get; private set; }
+		public byte WetMopRankOverlap { get; private set; }
 		
 		public RobotMop(string address, string blid, string password) : base(address, blid, password) { }
 
@@ -14,20 +18,21 @@ namespace IRobotLANClient {
 		}
 
 		protected override void HandleRobotStateUpdate() {
-			bool tankPresent = (bool) ReportedState.SelectToken("mopReady.tankPresent");
-			bool lidClosed = (bool) ReportedState.SelectToken("mopReady.lidClosed");
-			int tankLevel = (int) ReportedState.SelectToken("tankLvl");
-			string detectedPad = (string) ReportedState.SelectToken("detectedPad");
+			ReportedStateMop state = JsonConvert.DeserializeObject<ReportedStateMop>(ReportedState.ToString());
 
-			// In my experience, tankPresent = false always when tankLevel = 0, so we can probably use either one to determine if it needs filling
+			bool tankPresent = state.MopReady?.TankPresent ?? false;
+			bool lidClosed = state.MopReady?.LidClosed ?? false;
+
+			// In my experience, tankPresent = false always when tankLevel = 0, so we can probably use either one to
+			// determine if it needs filling
 
 			if (!lidClosed) {
 				TankStatus = TankStatus.LidOpen;
 			} else {
-				TankStatus = tankLevel > 0 && tankPresent ? TankStatus.Ok : TankStatus.Empty;
+				TankStatus = state.TankLvl > 0 && tankPresent ? TankStatus.Ok : TankStatus.Empty;
 			}
 
-			switch (detectedPad) {
+			switch (state.DetectedPad) {
 				case "invalid":
 					MopPadType = MopPadType.Invalid;
 					break;
@@ -49,10 +54,41 @@ namespace IRobotLANClient {
 					break;
 				
 				default:
-					Console.WriteLine($"WARNING: Unknown detectedPad: {detectedPad}");
+					Console.WriteLine($"WARNING: Unknown detectedPad: {state.DetectedPad}");
 					MopPadType = MopPadType.Invalid;
 					break;
 			}
+
+			WetMopPadWetness = state.PadWetness?.Disposable ?? 1;
+			WetMopRankOverlap = state.RankOverlap;
+		}
+
+		public override bool SupportsConfigOption(ConfigOption option) {
+			switch (option) {
+				case ConfigOption.WetMopPadWetness:
+					return ReportedState.SelectToken("padWetness.disposable")?.Type == JTokenType.Integer;
+				
+				case ConfigOption.WetMopPassOverlap:
+					// This key is also present on the i7 vacuum but I can't find a capability or feature flag that
+					// looks like it indicates whether this can be used.
+					return ReportedState.SelectToken("rankOverlap")?.Type == JTokenType.Integer;
+				
+				default:
+					return base.SupportsConfigOption(option);
+			}
+		}
+
+		public void SetWetMopPadWetness(byte wetness) {
+			UpdateOption(new {
+				padWetness = new {
+					disposable = wetness,
+					reusable = wetness
+				}
+			});
+		}
+
+		public void SetWetMopRankOverlap(byte rankOverlap) {
+			UpdateOption(new {rankOverlap});
 		}
 	}
 }

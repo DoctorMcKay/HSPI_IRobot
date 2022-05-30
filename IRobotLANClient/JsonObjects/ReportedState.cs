@@ -1,5 +1,4 @@
 ﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient.JsonObjects {
 	[JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]

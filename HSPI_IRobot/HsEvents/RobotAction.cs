@@ -6,11 +6,18 @@ using HomeSeer.Jui.Types;
 using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Events;
-using HSPI_IRobot.FeaturePageHandlers;
+using HSPI_IRobot.HsEvents.RobotActions;
 
 namespace HSPI_IRobot.HsEvents {
 	public class RobotAction : AbstractActionType {
 		public const int ActionNumber = 1;
+
+		internal Page InternalConfigPage {
+			get => ConfigPage;
+			set => ConfigPage = value;
+		}
+
+		private AbstractRobotAction _robotAction;
 
 		private string OptionIdSubAction => $"{PageId}-SubAction";
 		private string OptionIdRobot => $"{PageId}-Robot";
@@ -31,12 +38,17 @@ namespace HSPI_IRobot.HsEvents {
 			}
 		}
 		
-		private HSPI Plugin => (HSPI) ActionListener;
+		internal HSPI Plugin => (HSPI) ActionListener;
 
 		public RobotAction() { }
 
 		public RobotAction(int id, int eventRef, byte[] dataIn, ActionTypeCollection.IActionTypeListener listener, bool logDebug = false) : base(id, eventRef, dataIn, listener, logDebug) {
-			if (ConfigPage.ViewCount <= 0 || ConfigPage.ContainsViewWithId(OptionIdSubAction)) {
+			if (ConfigPage.ViewCount < 1) {
+				return;
+			}
+
+			if (ConfigPage.ContainsViewWithId(OptionIdSubAction)) {
+				_setupSubAction();
 				return;
 			}
 
@@ -82,7 +94,8 @@ namespace HSPI_IRobot.HsEvents {
 		protected sealed override void OnNewAction() {
 			List<string> subActionNames = new List<string> {
 				"Start Favorite Job",
-				"Reboot Robot"
+				"Reboot Robot",
+				"Change Robot Setting"
 			};
 
             PageFactory factory = PageFactory.CreateEventActionPage(PageId, Name);
@@ -95,22 +108,12 @@ namespace HSPI_IRobot.HsEvents {
 				ConfiguredSubAction == null
 				|| !ConfigPage.ContainsViewWithId(OptionIdRobot)
 				|| ConfigPage.GetViewById<SelectListView>(OptionIdRobot).Selection == -1
+				|| _robotAction == null
 			) {
 				return false;
 			}
 
-			switch (ConfiguredSubAction) {
-				case SubAction.StartFavoriteJob:
-					return ConfigPage.ContainsViewWithId(OptionIdJobName)
-					       && ConfigPage.GetViewById(OptionIdJobName) is SelectListView
-					       && !string.IsNullOrWhiteSpace(ConfigPage.GetViewById<SelectListView>(OptionIdJobName).GetSelectedOption());
-				
-				case SubAction.RebootRobot:
-					return true;
-				
-				default:
-					return false;
-			}
+			return _robotAction.IsFullyConfigured();
 		}
 
 		protected sealed override bool OnConfigItemUpdate(AbstractView configViewChange) {
@@ -131,53 +134,20 @@ namespace HSPI_IRobot.HsEvents {
 				
 				// Whenever this changes, we want to nuke all views except SubAction and Robot
 				ConfigPage.RemoveViewsAfterId(OptionIdRobot);
+				_robotAction = null;
 
 				if (selection == -1) {
 					// Selection cleared
 					return true;
 				}
+
+				string blid = ConfigPage.GetViewById<SelectListView>(OptionIdRobot).OptionKeys[selection];
 				
-				HsRobot robot = _getRobot(ConfigPage.GetViewById<SelectListView>(OptionIdRobot).OptionKeys[selection]);
-				if (robot == null) {
-					// Shouldn't happen but whatever
-					return false;
-				}
-
-				switch (ConfiguredSubAction) {
-					case SubAction.StartFavoriteJob:
-						List<FavoriteJobs.FavoriteJob> favorites = robot.GetFavoriteJobs();
-						if (favorites.Count == 0) {
-							LabelView noJobsLabel = new LabelView(OptionIdJobName, "Favorite Job", $"{robot.GetName()} has no saved favorite jobs. Configure favorite jobs from the <a href=\"/iRobot/favorites.html\">favorite jobs page</a>.");
-							ConfigPage.AddView(noJobsLabel);
-						} else {
-							SelectListView jobList = new SelectListView(OptionIdJobName, "Favorite Job", favorites.Select(j => j.Name).ToList());
-							ConfigPage.AddView(jobList);
-						}
-
-						return true;
-					
-					case SubAction.RebootRobot:
-						return true;
-					
-					default:
-						return false;
-				}
+				_setupSubAction();
+				return _robotAction?.OnNewSubAction(GetRobot(blid)) ?? false;
 			}
 
-			if (ConfiguredSubAction == SubAction.StartFavoriteJob && configViewChange.Id == OptionIdJobName) {
-				// Make sure it's a valid favorite
-				int selection = ((SelectListView) configViewChange).Selection;
-				if (selection == -1) {
-					return true;
-				}
-
-				string selectionName = ConfigPage.GetViewById<SelectListView>(OptionIdJobName).Options[selection];
-				
-				HsRobot robot = _getRobot();
-				return robot != null && robot.GetFavoriteJobs().Exists(job => job.Name == selectionName);
-			}
-
-			return false;
+			return _robotAction?.OnConfigItemUpdate(configViewChange) ?? false;
 		}
 
 		private void _addRobotSelectionView() {
@@ -195,50 +165,36 @@ namespace HSPI_IRobot.HsEvents {
 			ConfigPage.AddView(new SelectListView(OptionIdRobot, "Robot", robotNames, robotIds, ESelectListType.DropDown, selection));
 		}
 
-		public override string GetPrettyString() {
-			if (!IsFullyConfigured()) {
-				return string.Empty;
-			}
-
-			HsRobot robot = _getRobot();
-
+		private void _setupSubAction() {
 			switch (ConfiguredSubAction) {
 				case SubAction.StartFavoriteJob:
-					string jobName = ConfigPage.GetViewById<SelectListView>(OptionIdJobName).GetSelectedOption();
-					bool jobExists = robot.GetFavoriteJobs().Any(job => job.Name == jobName);
-					return $"iRobot: Start favorite job <font class=\"event_Txt_Selection\">{jobName}{(!jobExists ? " (JOB NO LONGER EXISTS)" : "")}</font> on <font class=\"event_Txt_Selection\">{robot.GetName()}</font>";
-				
+					_robotAction = new StartFavoriteJob(PageId, this);
+					break;
+
 				case SubAction.RebootRobot:
-					return $"iRobot: Reboot <font class=\"event_Txt_Selection\">{robot.GetName()}</font>";
+					_robotAction = new RebootRobot(PageId, this);
+					break;
+
+				case SubAction.ChangeSetting:
+					_robotAction = new ChangeSetting(PageId, this);
+					break;
 				
 				default:
-					return string.Empty;
+					_robotAction = null;
+					break;
 			}
+		}
+
+		public override string GetPrettyString() {
+			return _robotAction?.GetPrettyString() ?? string.Empty;
 		}
 
 		public override bool OnRunAction() {
-			HsRobot robot = _getRobot();
-
-			switch (ConfiguredSubAction) {
-				case SubAction.StartFavoriteJob:
-					string jobName = ConfigPage.GetViewById<SelectListView>(OptionIdJobName).GetSelectedOption();
-					return robot.StartFavoriteJob(jobName);
-				
-				case SubAction.RebootRobot:
-					if (robot.Robot == null || !robot.Robot.Connected) {
-						return false;
-					}
-					
-					robot.Robot.Reboot();
-					return true;
-				
-				default:
-					return false;
-			}
+			return _robotAction?.OnRunAction() ?? false;
 		}
 
 		public override bool ReferencesDeviceOrFeature(int devOrFeatRef) {
-			string blid = _getRobotBlid();
+			string blid = GetRobotBlid();
 			if (blid == null) {
 				return false;
 			}
@@ -250,7 +206,7 @@ namespace HSPI_IRobot.HsEvents {
 		public bool ReferencesFavoriteJob(string blid, string jobName) {
 			return ConfiguredSubAction == SubAction.StartFavoriteJob
 				   && IsFullyConfigured()
-			       && _getRobotBlid() == blid
+			       && GetRobotBlid() == blid
 			       && ConfigPage.GetViewById<SelectListView>(OptionIdJobName).GetSelectedOption() == jobName;
 		}
 
@@ -259,7 +215,7 @@ namespace HSPI_IRobot.HsEvents {
 			return $"{evt.GroupName} {evt.Event_Name}";
 		}
 		
-		private string _getRobotBlid() {
+		internal string GetRobotBlid() {
 			if (ConfigPage == null || !ConfigPage.ContainsViewWithId(OptionIdRobot)) {
 				return null;
 			}
@@ -268,8 +224,8 @@ namespace HSPI_IRobot.HsEvents {
 			return string.IsNullOrEmpty(blid) ? null : blid;
 		}
 
-		private HsRobot _getRobot(string blid = null) {
-			blid = blid ?? _getRobotBlid();
+		internal HsRobot GetRobot(string blid = null) {
+			blid = blid ?? GetRobotBlid();
 			if (blid == null) {
 				return null;
 			}
@@ -279,7 +235,8 @@ namespace HSPI_IRobot.HsEvents {
 
 		private enum SubAction : int {
 			StartFavoriteJob = 0,
-			RebootRobot
+			RebootRobot,
+			ChangeSetting
 		}
 	}
 }
