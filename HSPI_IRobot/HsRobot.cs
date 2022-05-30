@@ -405,24 +405,11 @@ namespace HSPI_IRobot {
 				favorite.Command.Remove(prop.Name);
 			}
 
-			string pmapVersion = (string) favorite.Command.SelectToken("user_pmapv_id");
-			string pmapId = (string) favorite.Command.SelectToken("pmap_id");
-			JArray pmaps;
-			if (pmapVersion != null && pmapId != null && (pmaps = (JArray) Client.ReportedState.SelectToken("pmaps")) != null) {
-				// Use the latest version of the map
-				string latestVersion = null;
-				
-				foreach (JToken token in pmaps) {
-					latestVersion = (string) token.SelectToken(pmapId);
-					if (latestVersion != null) {
-						break;
-					}
-				}
-
-				if (latestVersion != null) {
-					WriteLog(ELogType.Debug, $"Using latest version {latestVersion} of pmap {pmapId} (replacing version {pmapVersion} in favorite job {jobName})");
-					favorite.Command["user_pmapv_id"] = latestVersion;
-				}
+			// The robot will error if we send it a pmap version id that it doesn't expect (it changes over time), but
+			// it appears that sending no pmapv id works fine. So let's do that. The only alternative I can think of is
+			// checking against the cloud, but that's very un-ideal.
+			if (favorite.Command.ContainsKey("user_pmapv_id")) {
+				favorite.Command.Remove("user_pmapv_id");
 			}
 
 			Client.CleanCustom(favorite.Command);
