@@ -10,6 +10,7 @@ namespace IRobotLANClient.JsonObjects {
 		[JsonProperty("chrgLrPtrn")] public byte ChrgLrPtrn;
 		[JsonProperty("cleanMissionStatus")] public CleanMissionStatusType CleanMissionStatus;
 		[JsonProperty("pmapLearningAllowed")] public bool PmapLearningAllowed;
+		[JsonProperty("otaDownloadProgress")] public byte OtaDownloadProgress;
 
 		public class CleanMissionStatusType {
 			[JsonProperty("cycle")] public string Cycle;

@@ -30,6 +30,7 @@ namespace IRobotLANClient {
 		public int ErrorCode { get; private set; }
 		public int NotReadyCode { get; private set; }
 		public bool CanLearnMaps { get; private set; }
+		public byte SoftwareUpdateDownloadProgress { get; private set; }
 
 		public event EventHandler OnConnected;
 		public event EventHandler OnDisconnected;
@@ -397,6 +398,7 @@ namespace IRobotLANClient {
 			ErrorCode = state.CleanMissionStatus?.Error ?? 0;
 			NotReadyCode = state.CleanMissionStatus?.NotReady ?? 0;
 			CanLearnMaps = state.PmapLearningAllowed;
+			SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
 
 			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
 				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();

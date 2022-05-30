@@ -39,6 +39,7 @@ namespace HSPI_IRobot {
 		[JsonProperty] private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
 		private Timer _reconnectTimer = null;
 		private Timer _stateUpdateDebounceTimer = null;
+		private DateTime _installingSoftwareUpdate = DateTime.MinValue;
 		
 		// These properties are used for correcting the robot's erroneous phase change from "charge" to "run" when ending a job
 		private DateTime _lastDockToChargeTransition = DateTime.Now;
@@ -239,6 +240,13 @@ namespace HSPI_IRobot {
 				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
 				$"Robot {Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
 			);
+
+			if (state == HsRobotState.Connected) {
+				_installingSoftwareUpdate = DateTime.MinValue;
+			} else if (state == HsRobotState.CannotConnect && DateTime.Now.Subtract(_installingSoftwareUpdate).TotalMinutes <= 10) {
+				// We can't connect, but it's probably because the robot is installing a software update
+				stateString = "Installing software update";
+			}
 			
 			State = state;
 			CannotConnectReason = cannotConnectReason;
@@ -305,6 +313,21 @@ namespace HSPI_IRobot {
 				_stateUpdateDebounceTimer = null;
 				OnRobotStatusUpdated?.Invoke(this, null);
 			};
+			
+			// Let's handle OTA update progress
+			// When updating to 22.14.1 on May 30, 2022 my i7 was observed flipping "deploymentState" from 0
+			// to 1 to 2 to 3, then otaDownloadProgress went from 0 to 100, then notReady was set to 18, then
+			// deploymentState flipped from 3 to 4, and finally lastDisconnect was set to 3 before it disconnected.
+			// I'm not sure exactly which of these happens with every OTA update (deploymentState seems likely to always
+			// go to 4 before disconnecting, but not 100% sure) so let's just check the download percentage.
+			if (Client.SoftwareUpdateDownloadProgress > 0) {
+				_plugin.WriteLog(ELogType.Info, $"[{GetName()}] Downloading software update: {Client.SoftwareUpdateDownloadProgress}%");
+				StateString = $"OK (Downloading software update {Client.SoftwareUpdateDownloadProgress}%)";
+
+				_installingSoftwareUpdate = Client.SoftwareUpdateDownloadProgress >= 95 ? DateTime.Now : DateTime.MinValue;
+			} else {
+				_installingSoftwareUpdate = DateTime.MinValue;
+			}
 		}
 
 		private async void HandleDisconnect(object src, EventArgs arg) {
