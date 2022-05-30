@@ -5,7 +5,8 @@ using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
 	public class RobotVacuumClient : RobotClient {
-		public BinStatus BinStatus { get; protected set; }
+		public BinStatus BinStatus { get; private set; }
+		public bool EvacAllowed { get; private set; }
 		public bool BinFullPause { get; private set; }
 		public CleaningPassMode CleaningPassMode { get; private set; }
 
@@ -26,6 +27,7 @@ namespace IRobotLANClient {
 				BinStatus = binFull ? BinStatus.Full : BinStatus.Ok;
 			}
 
+			EvacAllowed = state.EvacAllowed;
 			BinFullPause = state.BinPause;
 
 			if (state.TwoPass) {

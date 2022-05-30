@@ -7,6 +7,7 @@ namespace IRobotLANClient.JsonObjects {
 		[JsonProperty("binPause")] public bool BinPause;
 		[JsonProperty("noAutoPasses")] public bool NoAutoPasses;
 		[JsonProperty("twoPass")] public bool TwoPass;
+		[JsonProperty("evacAllowed")] public bool EvacAllowed;
 
 		public class BinType {
 			[JsonProperty("present")] public bool Present;

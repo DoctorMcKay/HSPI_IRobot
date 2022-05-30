@@ -7,6 +7,7 @@ namespace IRobotLANClient.JsonObjects {
 		[JsonProperty("sku")] public string Sku;
 		[JsonProperty("batPct")] public byte BatPct;
 		[JsonProperty("childLock")] public bool ChildLock;
+		[JsonProperty("chrgLrPtrn")] public byte ChrgLrPtrn;
 		[JsonProperty("cleanMissionStatus")] public CleanMissionStatusType CleanMissionStatus;
 		[JsonProperty("pmapLearningAllowed")] public bool PmapLearningAllowed;
 

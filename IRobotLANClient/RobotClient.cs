@@ -294,6 +294,10 @@ namespace IRobotLANClient {
 			Sku = state.Sku;
 			BatteryLevel = state.BatPct;
 			ChildLock = state.ChildLock;
+			
+			// This will default to DockingAndCharging if the robot doesn't support light ring patterns, so it's up to
+			// the consumer to check that the robot supports the feature before actually trusting this value.
+			ChargeLightRingPattern = (ChargeLightRingPattern) state.ChrgLrPtrn;
 
 #if DEBUG
 			/*
