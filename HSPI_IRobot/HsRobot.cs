@@ -400,6 +400,13 @@ namespace HSPI_IRobot {
 				favorite.Command.Remove(prop.Name);
 			}
 
+			// The robot will error if we send it a pmap version id that it doesn't expect (it changes over time), but
+			// it appears that sending no pmapv id works fine. So let's do that. The only alternative I can think of is
+			// checking against the cloud, but that's very un-ideal.
+			if (favorite.Command.ContainsKey("user_pmapv_id")) {
+				favorite.Command.Remove("user_pmapv_id");
+			}
+			
 			Robot.CleanCustom(favorite.Command);
 			return true;
 		}
