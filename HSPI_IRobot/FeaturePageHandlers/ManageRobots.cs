@@ -40,7 +40,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 		}
 
 		private string _autodiscover() {
-			RobotDiscovery discovery = new RobotDiscovery();
+			DiscoveryClient discovery = new DiscoveryClient();
 			discovery.Discover();
 			discovery.OnRobotDiscovered += (sender, robot) => {
 				SetResult("autodiscover", new {discoveredRobots = discovery.DiscoveredRobots});

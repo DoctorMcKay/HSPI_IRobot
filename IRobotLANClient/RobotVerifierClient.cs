@@ -3,12 +3,12 @@ using IRobotLANClient.Enums;
 using System.Timers;
 
 namespace IRobotLANClient {
-	public class RobotVerifier : Robot {
+	public class RobotVerifierClient : RobotClient {
 		public RobotType DetectedType { get; private set; } = RobotType.Unrecognized;
 
 		private TaskCompletionSource<RobotType> _taskCompletionSource;
 
-		public RobotVerifier(string address, string blid, string password) : base(address, blid, password) { }
+		public RobotVerifierClient(string address, string blid, string password) : base(address, blid, password) { }
 
 		public override bool IsCorrectRobotType() {
 			return true;

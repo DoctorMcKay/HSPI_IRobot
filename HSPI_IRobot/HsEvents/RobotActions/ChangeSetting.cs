@@ -212,19 +212,19 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 					return true;
 				
 				case ConfigOption.BinFullPause:
-					((RobotVacuum) Robot.Client).SetBinFullPause(settingValueInt != 0);
+					((RobotVacuumClient) Robot.Client).SetBinFullPause(settingValueInt != 0);
 					return true;
 				
 				case ConfigOption.CleaningPassMode:
-					((RobotVacuum) Robot.Client).SetCleaningPassMode((CleaningPassMode) settingValueInt);
+					((RobotVacuumClient) Robot.Client).SetCleaningPassMode((CleaningPassMode) settingValueInt);
 					return true;
 				
 				case ConfigOption.WetMopPadWetness:
-					((RobotMop) Robot.Client).SetWetMopPadWetness((byte) settingValueInt);
+					((RobotMopClient) Robot.Client).SetWetMopPadWetness((byte) settingValueInt);
 					return true;
 				
 				case ConfigOption.WetMopPassOverlap:
-					((RobotMop) Robot.Client).SetWetMopRankOverlap((byte) settingValueInt);
+					((RobotMopClient) Robot.Client).SetWetMopRankOverlap((byte) settingValueInt);
 					return true;
 				
 				default:

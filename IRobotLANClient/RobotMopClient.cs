@@ -5,13 +5,13 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
-	public class RobotMop : Robot {
+	public class RobotMopClient : RobotClient {
 		public TankStatus TankStatus { get; private set; }
 		public MopPadType MopPadType { get; private set; }
 		public byte WetMopPadWetness { get; private set; }
 		public byte WetMopRankOverlap { get; private set; }
 		
-		public RobotMop(string address, string blid, string password) : base(address, blid, password) { }
+		public RobotMopClient(string address, string blid, string password) : base(address, blid, password) { }
 
 		public override bool IsCorrectRobotType() {
 			return ReportedState.ContainsKey("mopReady");

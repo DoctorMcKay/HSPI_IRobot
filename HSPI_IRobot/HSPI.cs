@@ -17,6 +17,7 @@ using HSPI_IRobot.FeaturePageHandlers;
 using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -39,7 +40,7 @@ namespace HSPI_IRobot {
 
 		protected override void Initialize() {
 			string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(Robot)).Location).FileVersion;
+			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(RobotClient)).Location).FileVersion;
 
 #if DEBUG
 			WriteLog(ELogType.Info, $"Plugin version {pluginVersion} starting with client version {irobotClientVersion}");
@@ -157,7 +158,7 @@ namespace HSPI_IRobot {
 					
 					case RobotStatus.Evac:
 						if (robot.Type == RobotType.Vacuum) {
-							RobotVacuum roboVac = (RobotVacuum) robot.Client;
+							RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
 							roboVac.Evac();
 						}
 
@@ -320,7 +321,7 @@ namespace HSPI_IRobot {
 
 			switch (robot.Type) {
 				case RobotType.Vacuum:
-					RobotVacuum roboVac = (RobotVacuum) robot.Client;
+					RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
 					
 					// Bin
 					feature = robot.GetFeature(FeatureType.VacuumBin);
@@ -329,7 +330,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotType.Mop:
-					RobotMop roboMop = (RobotMop) robot.Client;
+					RobotMopClient roboMop = (RobotMopClient) robot.Client;
 					
 					// Tank
 					feature = robot.GetFeature(FeatureType.MopTank);
@@ -406,11 +407,11 @@ namespace HSPI_IRobot {
 
 		public async Task<string> AddNewRobot(string ip, string blid, string password) {
 			// First things first, let's try to connect and see if we can
-			RobotVerifier verifier = null;
+			RobotVerifierClient verifier = null;
 			try {
 				WriteLog(ELogType.Debug, $"Adding new robot with IP {ip} and BLID {blid}");
 
-				verifier = new RobotVerifier(ip, blid, password);
+				verifier = new RobotVerifierClient(ip, blid, password);
 				verifier.OnDebugOutput += (sender, args) => WriteLog(ELogType.Debug, $"[V:{blid}] {args.Output}");
 				await verifier.Connect();
 
@@ -440,7 +441,7 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, JsonConvert.SerializeObject(verifier?.ReportedState));
 				return "Robot verification timed out";
 			} catch (RobotConnectionException ex) {
-				RobotDiscovery.DiscoveredRobot robotMetadata = await new RobotDiscovery().GetRobotPublicDetails(ip);
+				DiscoveryClient.DiscoveredRobot robotMetadata = await new DiscoveryClient().GetRobotPublicDetails(ip);
 				if (robotMetadata == null) {
 					return "This IP address doesn't appear to belong to an iRobot product.";
 				}
@@ -468,7 +469,7 @@ namespace HSPI_IRobot {
 			}
 		}
 
-		private async void _createNewRobotDevice(string ip, string blid, string password, RobotVerifier verifier) {
+		private async void _createNewRobotDevice(string ip, string blid, string password, RobotVerifierClient verifier) {
 			PlugExtraData extraData = new PlugExtraData();
 			extraData.AddNamed("lastknownip", ip);
 			extraData.AddNamed("blid", blid);

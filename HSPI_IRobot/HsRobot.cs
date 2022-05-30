@@ -9,6 +9,7 @@ using HSPI_IRobot.Enums;
 using HSPI_IRobot.FeaturePageHandlers;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Timer = System.Timers.Timer;
@@ -19,7 +20,7 @@ namespace HSPI_IRobot {
 		public HsRobotCannotConnectReason CannotConnectReason { get; private set; } = HsRobotCannotConnectReason.Ok;
 		public string StateString { get; private set; } = "Connecting";
 		public string ConnectedIp { get; private set; }
-		public Robot Client { get; private set; } = null;
+		public RobotClient Client { get; private set; } = null;
 
 		public HsDevice HsDevice => _plugin.GetHsController().GetDeviceByRef(HsDeviceRef);
 		
@@ -100,11 +101,11 @@ namespace HSPI_IRobot {
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
 			Client = null;
-			Robot robot;
+			RobotClient robot;
 			if (Type == RobotType.Vacuum) {
-				robot = new RobotVacuum(connectIp, Blid, Password);
+				robot = new RobotVacuumClient(connectIp, Blid, Password);
 			} else {
-				robot = new RobotMop(connectIp, Blid, Password);
+				robot = new RobotMopClient(connectIp, Blid, Password);
 			}
 			
 			robot.OnStateUpdated += HandleDataUpdate;
@@ -184,7 +185,7 @@ namespace HSPI_IRobot {
 		}
 
 		private async Task<string> FindRobot() {
-			RobotDiscovery discovery = new RobotDiscovery();
+			DiscoveryClient discovery = new DiscoveryClient();
 			discovery.Discover();
 
 			string discoveredRobotIp = null;
@@ -247,7 +248,7 @@ namespace HSPI_IRobot {
 
 		private void HandleDataUpdate(object src, EventArgs arg) {
 			if (Client == null) {
-				Robot srcRobot = (Robot) src;
+				RobotClient srcRobot = (RobotClient) src;
 				// We're waiting to make sure this robot is of a valid type
 				if (srcRobot.IsCorrectRobotType()) {
 					// All seems good!
@@ -316,7 +317,7 @@ namespace HSPI_IRobot {
 			await AttemptConnect();
 		}
 
-		private void HandleUnexpectedValue(object src, Robot.UnexpectedValueEventArgs arg) {
+		private void HandleUnexpectedValue(object src, RobotClient.UnexpectedValueEventArgs arg) {
 			_plugin.WriteLog(ELogType.Error, $"Unexpected {arg.ValueType} value: \"{arg.Value}\"");
 		}
 

@@ -4,12 +4,12 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
-	public class RobotVacuum : Robot {
+	public class RobotVacuumClient : RobotClient {
 		public BinStatus BinStatus { get; protected set; }
 		public bool BinFullPause { get; private set; }
 		public CleaningPassMode CleaningPassMode { get; private set; }
 
-		public RobotVacuum(string address, string blid, string password) : base(address, blid, password) { }
+		public RobotVacuumClient(string address, string blid, string password) : base(address, blid, password) { }
 
 		public override bool IsCorrectRobotType() {
 			return ReportedState.ContainsKey("bin");

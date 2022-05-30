@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using IRobotLANClient.Enums;
+using IRobotLANClient.Exceptions;
 using IRobotLANClient.JsonObjects;
 using MQTTnet.Client;
 using MQTTnet;
@@ -15,7 +16,7 @@ using Newtonsoft.Json.Linq;
 using Timer = System.Timers.Timer;
 
 namespace IRobotLANClient {
-	public abstract class Robot {
+	public abstract class RobotClient {
 		public bool Connected { get; private set; }
 		public JObject ReportedState { get; private set; } = new JObject();
 		public JObject LastJobStartCommand { get; private set; } = null;
@@ -48,7 +49,7 @@ namespace IRobotLANClient {
 		private bool _awaitingFirstReportTimer;
 		private DateTime _connectedTime;
 
-		public Robot(string address, string blid, string password) {
+		public RobotClient(string address, string blid, string password) {
 			Connected = false;
 			Address = address;
 			Blid = blid;

@@ -54,18 +54,18 @@
         <Compile Include="Enums\MopPadType.cs" />
         <Compile Include="Enums\RobotType.cs" />
         <Compile Include="Enums\TankStatus.cs" />
+        <Compile Include="Exceptions\RobotConnectionException.cs" />
         <Compile Include="JsonCompare.cs" />
         <Compile Include="JsonObjects\ReportedState.cs" />
         <Compile Include="JsonObjects\ReportedStateMop.cs" />
         <Compile Include="JsonObjects\ReportedStateVacuum.cs" />
         <Compile Include="MqttHandler.cs" />
-        <Compile Include="Robot.cs" />
+        <Compile Include="RobotClient.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
-        <Compile Include="RobotConnectionException.cs" />
-        <Compile Include="RobotDiscovery.cs" />
-        <Compile Include="RobotMop.cs" />
-        <Compile Include="RobotVacuum.cs" />
-        <Compile Include="RobotVerifier.cs" />
+        <Compile Include="DiscoveryClient.cs" />
+        <Compile Include="RobotMopClient.cs" />
+        <Compile Include="RobotVacuumClient.cs" />
+        <Compile Include="RobotVerifierClient.cs" />
     </ItemGroup>
     <ItemGroup>
       <None Include="packages.config" />

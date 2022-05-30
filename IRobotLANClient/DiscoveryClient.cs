@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
-	public class RobotDiscovery {
+	public class DiscoveryClient {
 		public event EventHandler<DiscoveredRobot> OnRobotDiscovered;
 		public List<DiscoveredRobot> DiscoveredRobots = new List<DiscoveredRobot>();
 
