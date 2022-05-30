@@ -74,7 +74,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 					ip = robot.ConnectedIp,
 					type = robot.Type == RobotType.Vacuum ? "vacuum" : "mop",
 					name = robot.GetName(),
-					sku = robot.Robot?.Sku ?? "unknown"
+					sku = robot.Client?.Sku ?? "unknown"
 				})
 			});
 		}
@@ -87,7 +87,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
 			return robot == null
 				? ErrorResponse("Invalid blid")
-				: JsonConvert.SerializeObject(new {status = robot.Robot?.ReportedState});
+				: JsonConvert.SerializeObject(new {status = robot.Client?.ReportedState});
 		}
 
 		private string _rebootRobot(string blid) {
@@ -100,11 +100,11 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				return ErrorResponse("Invalid blid");
 			}
 
-			if (robot.Robot == null || !robot.Robot.Connected) {
+			if (robot.Client == null || !robot.Client.Connected) {
 				return ErrorResponse("Not connected");
 			}
 			
-			robot.Robot.Reboot();
+			robot.Client.Reboot();
 			return SuccessResponse;
 		}
 

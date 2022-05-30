@@ -182,7 +182,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				robots = HSPI.Instance.HsRobots.Select(robot => new {
 					blid = robot.Blid,
 					name = robot.GetName(),
-					lastCommand = robot.Robot?.LastJobStartCommand
+					lastCommand = robot.Client?.LastJobStartCommand
 				})
 			});
 		}

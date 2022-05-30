@@ -21,11 +21,11 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 		}
 
 		public override bool OnRunAction() {
-			if (!(Robot.Robot?.Connected ?? false)) {
+			if (!(Robot.Client?.Connected ?? false)) {
 				return false;
 			}
 			
-			Robot.Robot.Reboot();
+			Robot.Client.Reboot();
 			return true;
 		}
 	}

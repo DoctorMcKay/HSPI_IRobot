@@ -104,7 +104,7 @@ namespace HSPI_IRobot {
 			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
 
 			await robot.AttemptConnect();
-			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
+			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Client.Name : robot.Blid;
 			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
@@ -124,7 +124,7 @@ namespace HSPI_IRobot {
 				HsFeature feature = HomeSeerSystem.GetFeatureByRef(ctrl.TargetRef);
 				string[] addressParts = feature.Address.Split(':');
 				HsRobot robot = HsRobots.Find(r => r.Blid == addressParts[0]);
-				if (robot?.Robot == null) {
+				if (robot?.Client == null) {
 					WriteLog(ELogType.Warning, $"Got SetIOMulti {ctrl.TargetRef} = {ctrl.ControlValue}, but no such robot found or not connected");
 					continue;
 				}
@@ -132,39 +132,39 @@ namespace HSPI_IRobot {
 				RobotStatus command = (RobotStatus) ctrl.ControlValue;
 				switch (command) {
 					case RobotStatus.Clean:
-						robot.Robot.Clean();
+						robot.Client.Clean();
 						break;
 					
 					case RobotStatus.OffBaseNoJob:
-						robot.Robot.Stop();
+						robot.Client.Stop();
 						break;
 					
 					case RobotStatus.JobPaused:
-						robot.Robot.Pause();
+						robot.Client.Pause();
 						break;
 					
 					case RobotStatus.Resume:
-						robot.Robot.Resume();
+						robot.Client.Resume();
 						break;
 					
 					case RobotStatus.DockManually:
-						robot.Robot.Dock();
+						robot.Client.Dock();
 						break;
 					
 					case RobotStatus.Find:
-						robot.Robot.Find();
+						robot.Client.Find();
 						break;
 					
 					case RobotStatus.Evac:
 						if (robot.Type == RobotType.Vacuum) {
-							RobotVacuum roboVac = (RobotVacuum) robot.Robot;
+							RobotVacuum roboVac = (RobotVacuum) robot.Client;
 							roboVac.Evac();
 						}
 
 						break;
 					
 					case RobotStatus.Train:
-						robot.Robot.Train();
+						robot.Client.Train();
 						break;
 				}
 			}
@@ -207,21 +207,21 @@ namespace HSPI_IRobot {
 
 		private void HandleRobotStatusUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
-			WriteLog(ELogType.Debug, $"Robot {robot.Robot.Name} updated: battery {robot.Robot.BatteryLevel}; cycle {robot.Robot.Cycle}; phase {robot.Robot.Phase}");
+			WriteLog(ELogType.Debug, $"Robot {robot.Client.Name} updated: battery {robot.Client.BatteryLevel}; cycle {robot.Client.Cycle}; phase {robot.Client.Phase}");
 
 			bool wasNavigating = robot.IsNavigating();
 
 			// Features common to all robot types
 			// Status
 			RobotStatus status = RobotStatus.OffBaseNoJob;
-			switch (robot.Robot.Cycle) {
+			switch (robot.Client.Cycle) {
 				case MissionCycle.None:
-					status = robot.Robot.Phase == MissionPhase.Stop ? RobotStatus.OffBaseNoJob : RobotStatus.OnBase;
+					status = robot.Client.Phase == MissionPhase.Stop ? RobotStatus.OffBaseNoJob : RobotStatus.OnBase;
 					break;
 				
 				case MissionCycle.Clean:
 				case MissionCycle.Spot:
-					switch (robot.Robot.Phase) {
+					switch (robot.Client.Phase) {
 						case MissionPhase.Stop:
 							status = RobotStatus.JobPaused;
 							break;
@@ -245,7 +245,7 @@ namespace HSPI_IRobot {
 					break;
 			}
 
-			if (robot.Robot.Phase == MissionPhase.Stuck) {
+			if (robot.Client.Phase == MissionPhase.Stuck) {
 				// Regardless of what our cycle is, if we're stuck we're stuck
 				status = RobotStatus.Stuck;
 			}
@@ -265,7 +265,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotStatus.Clean:
-					switch (robot.Robot.Phase) {
+					switch (robot.Client.Phase) {
 						case MissionPhase.Charge:
 							jobPhase = CleanJobPhase.Charging;
 							break;
@@ -302,25 +302,25 @@ namespace HSPI_IRobot {
 			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) jobPhase);
 			
 			// Battery
-			bool isCharging = robot.Robot.BatteryLevel < 100 && robot.Robot.Phase == MissionPhase.Charge;
+			bool isCharging = robot.Client.BatteryLevel < 100 && robot.Client.Phase == MissionPhase.Charge;
 			feature = robot.GetFeature(FeatureType.Battery);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.BatteryLevel);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.BatteryLevel);
 			HomeSeerSystem.UpdateFeatureValueStringByRef(
 				feature.Ref,
-				isCharging ? $"{robot.Robot.BatteryLevel}% (charging)" : ""
+				isCharging ? $"{robot.Client.BatteryLevel}% (charging)" : ""
 			);
 			
 			// Ready
 			feature = robot.GetFeature(FeatureType.Ready);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.NotReadyCode);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.NotReadyCode);
 			
 			// Error
 			feature = robot.GetFeature(FeatureType.Error);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.ErrorCode);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.ErrorCode);
 
 			switch (robot.Type) {
 				case RobotType.Vacuum:
-					RobotVacuum roboVac = (RobotVacuum) robot.Robot;
+					RobotVacuum roboVac = (RobotVacuum) robot.Client;
 					
 					// Bin
 					feature = robot.GetFeature(FeatureType.VacuumBin);
@@ -329,7 +329,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotType.Mop:
-					RobotMop roboMop = (RobotMop) robot.Robot;
+					RobotMop roboMop = (RobotMop) robot.Client;
 					
 					// Tank
 					feature = robot.GetFeature(FeatureType.MopTank);

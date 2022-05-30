@@ -19,7 +19,7 @@ namespace HSPI_IRobot {
 		public HsRobotCannotConnectReason CannotConnectReason { get; private set; } = HsRobotCannotConnectReason.Ok;
 		public string StateString { get; private set; } = "Connecting";
 		public string ConnectedIp { get; private set; }
-		public Robot Robot { get; private set; } = null;
+		public Robot Client { get; private set; } = null;
 
 		public HsDevice HsDevice => _plugin.GetHsController().GetDeviceByRef(HsDeviceRef);
 		
@@ -99,7 +99,7 @@ namespace HSPI_IRobot {
 			
 			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
-			Robot = null;
+			Client = null;
 			Robot robot;
 			if (Type == RobotType.Vacuum) {
 				robot = new RobotVacuum(connectIp, Blid, Password);
@@ -165,12 +165,12 @@ namespace HSPI_IRobot {
 					return;
 				}
 				
-				if (Robot != null) {
+				if (Client != null) {
 					// We passed validation
 					UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.Ok, "OK");
 					ConnectedIp = connectIp;
-					Robot.OnDisconnected += HandleDisconnect;
-					Robot.OnUnexpectedValue += HandleUnexpectedValue;
+					Client.OnDisconnected += HandleDisconnect;
+					Client.OnUnexpectedValue += HandleUnexpectedValue;
 					return;
 				}
 				
@@ -211,9 +211,9 @@ namespace HSPI_IRobot {
 		public async void Disconnect() {
 			_reconnectTimer?.Stop();
 			
-			if (Robot != null) {
-				Robot.OnDisconnected -= HandleDisconnect;
-				await Robot.Disconnect();
+			if (Client != null) {
+				Client.OnDisconnected -= HandleDisconnect;
+				await Client.Disconnect();
 			}
 		}
 
@@ -246,12 +246,12 @@ namespace HSPI_IRobot {
 		}
 
 		private void HandleDataUpdate(object src, EventArgs arg) {
-			if (Robot == null) {
+			if (Client == null) {
 				Robot srcRobot = (Robot) src;
 				// We're waiting to make sure this robot is of a valid type
 				if (srcRobot.IsCorrectRobotType()) {
 					// All seems good!
-					Robot = srcRobot;
+					Client = srcRobot;
 				} else {
 					_robotTypeFailedValidation = true;
 					srcRobot.Disconnect().ContinueWith(_ => { });
@@ -271,7 +271,7 @@ namespace HSPI_IRobot {
 			// go from Charge to Run.
 
 			if (
-				Robot.Phase == MissionPhase.Charge
+				Client.Phase == MissionPhase.Charge
 				&& (
 					_lastObservedMissionPhase == MissionPhase.DockingAfterMission
 					|| _lastObservedMissionPhase == MissionPhase.DockingMidMission
@@ -284,7 +284,7 @@ namespace HSPI_IRobot {
 
 			double debounceTimerInterval = 500;
 			
-			if (Robot.Phase == MissionPhase.Run && DateTime.Now.Subtract(_lastDockToChargeTransition).TotalSeconds <= 1) {
+			if (Client.Phase == MissionPhase.Run && DateTime.Now.Subtract(_lastDockToChargeTransition).TotalSeconds <= 1) {
 				// Our new phase is run, but we just saw the robot dock under 1s ago. It's unlikely that the robot
 				// immediately went back to running right after docking, so this is probably the robot issue we see where
 				// it goes to Clean/Run for ~5 seconds before going to None/NoJob. Increase our debounce timer to 10s.
@@ -292,7 +292,7 @@ namespace HSPI_IRobot {
 				debounceTimerInterval = 10000;
 			}
 
-			_lastObservedMissionPhase = Robot.Phase;
+			_lastObservedMissionPhase = Client.Phase;
 
 			_stateUpdateDebounceTimer?.Stop();
 			_stateUpdateDebounceTimer = new Timer {
@@ -307,9 +307,9 @@ namespace HSPI_IRobot {
 		}
 
 		private async void HandleDisconnect(object src, EventArgs arg) {
-			Robot.OnDisconnected -= HandleDisconnect;
+			Client.OnDisconnected -= HandleDisconnect;
 
-			_plugin.WriteLog(ELogType.Warning, $"Disconnected from robot {Robot.Name}");
+			_plugin.WriteLog(ELogType.Warning, $"Disconnected from robot {Client.Name}");
 			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.Ok, "Disconnected");
 
 			await Task.Delay(1000);
@@ -344,8 +344,8 @@ namespace HSPI_IRobot {
 		}
 
 		public string GetName() {
-			if (Robot?.Name != null) {
-				return Robot.Name;
+			if (Client?.Name != null) {
+				return Client.Name;
 			}
 
 			HsDevice device = _plugin.GetHsController().GetDeviceByAddress(Blid);
@@ -387,7 +387,7 @@ namespace HSPI_IRobot {
 		}
 
 		public bool StartFavoriteJob(string jobName) {
-			if (Robot == null || State != HsRobotState.Connected) {
+			if (Client == null || State != HsRobotState.Connected) {
 				return false;
 			}
 			
@@ -400,7 +400,7 @@ namespace HSPI_IRobot {
 				favorite.Command.Remove(prop.Name);
 			}
 
-			Robot.CleanCustom(favorite.Command);
+			Client.CleanCustom(favorite.Command);
 			return true;
 		}
 

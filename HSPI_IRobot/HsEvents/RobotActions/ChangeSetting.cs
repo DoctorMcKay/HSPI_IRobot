@@ -13,7 +13,7 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 		public ChangeSetting(string pageId, RobotAction action) : base(pageId, action) { }
 		
 		public override bool OnNewSubAction(HsRobot robot) {
-			if (!(robot.Robot?.Connected ?? false)) {
+			if (!(robot.Client?.Connected ?? false)) {
             	// Don't allow saving if the robot isn't connected
             	return false;
             }
@@ -22,7 +22,7 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
             List<string> optionLabels = new List<string>();
 
             foreach (ConfigOption option in Enum.GetValues(typeof(ConfigOption))) {
-            	if (!robot.Robot.SupportsConfigOption(option)) {
+            	if (!robot.Client.SupportsConfigOption(option)) {
             		continue;
             	}
 
@@ -192,7 +192,7 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 				return false;
 			}
 
-			if (!(Robot.Robot?.Connected ?? false)) {
+			if (!(Robot.Client?.Connected ?? false)) {
 				return false;
 			}
 
@@ -204,27 +204,27 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 
 			switch ((ConfigOption) settingKeyInt) {
 				case ConfigOption.ChargeLightRingPattern:
-					Robot.Robot.SetChargeLightRingPattern((ChargeLightRingPattern) settingValueInt);
+					Robot.Client.SetChargeLightRingPattern((ChargeLightRingPattern) settingValueInt);
 					return true;
 				
 				case ConfigOption.ChildLock:
-					Robot.Robot.SetChildLock(settingValueInt != 0);
+					Robot.Client.SetChildLock(settingValueInt != 0);
 					return true;
 				
 				case ConfigOption.BinFullPause:
-					((RobotVacuum) Robot.Robot).SetBinFullPause(settingValueInt != 0);
+					((RobotVacuum) Robot.Client).SetBinFullPause(settingValueInt != 0);
 					return true;
 				
 				case ConfigOption.CleaningPassMode:
-					((RobotVacuum) Robot.Robot).SetCleaningPassMode((CleaningPassMode) settingValueInt);
+					((RobotVacuum) Robot.Client).SetCleaningPassMode((CleaningPassMode) settingValueInt);
 					return true;
 				
 				case ConfigOption.WetMopPadWetness:
-					((RobotMop) Robot.Robot).SetWetMopPadWetness((byte) settingValueInt);
+					((RobotMop) Robot.Client).SetWetMopPadWetness((byte) settingValueInt);
 					return true;
 				
 				case ConfigOption.WetMopPassOverlap:
-					((RobotMop) Robot.Robot).SetWetMopRankOverlap((byte) settingValueInt);
+					((RobotMop) Robot.Client).SetWetMopRankOverlap((byte) settingValueInt);
 					return true;
 				
 				default:
