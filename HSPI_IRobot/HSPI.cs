@@ -105,8 +105,7 @@ namespace HSPI_IRobot {
 			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
 
 			await robot.AttemptConnect();
-			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Client.Name : robot.Blid;
-			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
+			WriteLog(ELogType.Debug, $"Initial connection attempt to {robot.GetName()} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
 				PlugExtraData ped = robot.PlugExtraData;

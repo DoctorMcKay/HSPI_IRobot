@@ -143,6 +143,21 @@ namespace IRobotLANClient {
 
 		public abstract bool IsCorrectRobotType();
 
+		public async Task<bool> WaitForTypeValidation(int timeoutMilliseconds) {
+			DateTime start = DateTime.Now;
+
+			while (DateTime.Now.Subtract(start).TotalMilliseconds < timeoutMilliseconds) {
+				if (IsCorrectRobotType()) {
+					return true;
+				}
+
+				await Task.Delay(100);
+			}
+
+			// Validation timed out
+			return false;
+		}
+
 		public void Clean() {
 			SendCommand("start");
 		}

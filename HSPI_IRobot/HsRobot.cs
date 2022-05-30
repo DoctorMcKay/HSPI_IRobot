@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
@@ -35,7 +36,6 @@ namespace HSPI_IRobot {
 		[JsonIgnore] public readonly string Password;
 		
 		private readonly HSPI _plugin;
-		private bool _robotTypeFailedValidation = false;
 		[JsonProperty] private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
 		private Timer _reconnectTimer = null;
 		private Timer _stateUpdateDebounceTimer = null;
@@ -65,11 +65,11 @@ namespace HSPI_IRobot {
 			} catch (KeyNotFoundException) {
 				string deviceName = HsDevice.Name;
 				
-				_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is corrupt. Attempting automatic repair.");
+				WriteLog(ELogType.Error, $"HS4 device {deviceName} is corrupt. Attempting automatic repair.");
 				if (!_plugin.RestorePlugExtraData(deviceRef)) {
 					State = HsRobotState.FatalError;
 					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
-					_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
+					WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
 					return;
 				}
 				
@@ -82,14 +82,14 @@ namespace HSPI_IRobot {
 				} catch (KeyNotFoundException) {
 					State = HsRobotState.FatalError;
 					StateString = "HS4 device is irreparably corrupt. Delete and re-add the robot.";
-					_plugin.WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
+					WriteLog(ELogType.Error, $"HS4 device {deviceName} is irreparably corrupt. Delete and re-add the robot.");
 				}
 			}
 		}
 
 		public async Task AttemptConnect(string ip = null, bool skipStateCheck = false) {
 			if (State == HsRobotState.Connecting && !skipStateCheck) {
-				_plugin.WriteLog(ELogType.Warning, "Aborting AttemptConnect because our state is already Connecting");
+				WriteLog(ELogType.Warning, "Aborting AttemptConnect because our state is already Connecting");
 				return;
 			}
 			
@@ -99,7 +99,7 @@ namespace HSPI_IRobot {
 			string lastKnownIp = ped.ContainsNamed("lastknownip") ? ped["lastknownip"] : null;
 			string connectIp = ip ?? lastKnownIp ?? "127.0.0.1";
 			
-			_plugin.WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
+			WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
 			Client = null;
 			RobotClient robot;
@@ -111,7 +111,7 @@ namespace HSPI_IRobot {
 			
 			robot.OnStateUpdated += HandleDataUpdate;
 			robot.OnDebugOutput += (sender, args) => {
-				_plugin.WriteLog(ELogType.Trace, $"[{robot.Name ?? Blid}] {args.Output}");
+				WriteLog(ELogType.Trace, args.Output);
 			};
 
 			try {
@@ -119,7 +119,7 @@ namespace HSPI_IRobot {
 			} catch (Exception ex) {
 				_lastConnectException = ex;
 				
-				_plugin.WriteLog(ELogType.Warning, $"Unable to connect to robot {Blid} at {connectIp}: {ex.Message}");
+				WriteLog(ELogType.Warning, $"Unable to connect to robot {Blid} at {connectIp}: {ex.Message}");
 				string discoveredRobotIp = await FindRobot();
 				if (discoveredRobotIp == null || discoveredRobotIp == connectIp) {
 					// Either we couldn't discover the robot, or it has the same IP as we already tried
@@ -131,19 +131,19 @@ namespace HSPI_IRobot {
 						// We discovered it, but can't connect
 						cannotConnectReason = HsRobotCannotConnectReason.DiscoveredCannotConnect;
 						if (ex is RobotConnectionException exception) {
-							_plugin.WriteLog(
+							WriteLog(
 								exception.ConnectionError == ConnectionError.UnspecifiedError ? ELogType.Warning : ELogType.Debug,
 								$"Connection error for {Blid}: {exception.RecursiveMessage}"
 							);
 							
 							stringState = exception.FriendlyMessage;
 						} else {
-							_plugin.WriteLog(ELogType.Warning, $"Unspecified connection error type for {Blid}: {ex.Message}");
+							WriteLog(ELogType.Warning, $"Unspecified connection error type for {Blid}: {ex.Message}");
 							stringState = ex.Message;
 						}
 					} else {
 						// Not discovered
-						_plugin.WriteLog(ELogType.Debug, $"Connection error for {Blid}: not discovered on network");
+						WriteLog(ELogType.Debug, $"Connection error for {Blid}: not discovered on network");
 						cannotConnectReason = HsRobotCannotConnectReason.CannotDiscover;
 						stringState = "Not found on the network";
 					}
@@ -154,35 +154,29 @@ namespace HSPI_IRobot {
 				}
 				
 				// We found it at a new IP, so let's try connecting again
+				WriteLog(ELogType.Debug, $"Detected {Blid} at new IP: {discoveredRobotIp}");
 				await AttemptConnect(discoveredRobotIp, true);
 				return;
 			}
 
 			// We are now connected, but waiting to make sure the robot type is correct
-			DateTime dataUpdateWaitStart = DateTime.Now;
-			while (DateTime.Now.Subtract(dataUpdateWaitStart).TotalSeconds < 10) {
-				if (_robotTypeFailedValidation) {
-					UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Robot credentials are correct, but are not for the expected type of robot");
-					EnqueueReconnectAttempt();
-					return;
-				}
-				
-				if (Client != null) {
-					// We passed validation
-					UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.Ok, "OK");
-					ConnectedIp = connectIp;
-					Client.OnDisconnected += HandleDisconnect;
-					Client.OnUnexpectedValue += HandleUnexpectedValue;
-					return;
-				}
-				
-				// Still waiting on validation
-				await Task.Delay(100);
+			DateTime validationWaitStart = DateTime.Now;
+			bool typeValidated = await robot.WaitForTypeValidation(5000);
+			WriteLog(ELogType.Debug, $"Type validation done in {DateTime.Now.Subtract(validationWaitStart).TotalMilliseconds} ms with result: {typeValidated}");
+			
+			if (!typeValidated) {
+				await robot.Disconnect();
+				UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Could not verify robot type");
+				EnqueueReconnectAttempt();
+				return;
 			}
-
-			UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.CannotValidateType, "Timed out waiting on validation of robot type");
-			await robot.Disconnect();
-			EnqueueReconnectAttempt();
+			
+			// We passed validation
+			Client = robot;
+			UpdateState(HsRobotState.Connected, HsRobotCannotConnectReason.Ok, "OK");
+			ConnectedIp = connectIp;
+			Client.OnDisconnected += HandleDisconnect;
+			Client.OnUnexpectedValue += HandleUnexpectedValue;
 		}
 
 		private async Task<string> FindRobot() {
@@ -236,9 +230,9 @@ namespace HSPI_IRobot {
 		}
 
 		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
-			_plugin.WriteLog(
+			WriteLog(
 				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
-				$"Robot {Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
+				$"{Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
 			);
 
 			if (state == HsRobotState.Connected) {
@@ -255,19 +249,6 @@ namespace HSPI_IRobot {
 		}
 
 		private void HandleDataUpdate(object src, EventArgs arg) {
-			if (Client == null) {
-				RobotClient srcRobot = (RobotClient) src;
-				// We're waiting to make sure this robot is of a valid type
-				if (srcRobot.IsCorrectRobotType()) {
-					// All seems good!
-					Client = srcRobot;
-				} else {
-					_robotTypeFailedValidation = true;
-					srcRobot.Disconnect().ContinueWith(_ => { });
-					return;
-				}
-			}
-			
 			// When a robot's state updates, especially when docking after a job is finished, it's possible for it to
 			// rapidly flip between multiple different states. It has been observed that when a robot docks, it rapidly
 			// flips between Clean/UserSentHome to Clean/Stop to Clean/UserSentHome to Clean/Charge to Clean/Run to Clean/Charge
@@ -321,7 +302,7 @@ namespace HSPI_IRobot {
 			// I'm not sure exactly which of these happens with every OTA update (deploymentState seems likely to always
 			// go to 4 before disconnecting, but not 100% sure) so let's just check the download percentage.
 			if (Client.SoftwareUpdateDownloadProgress > 0) {
-				_plugin.WriteLog(ELogType.Info, $"[{GetName()}] Downloading software update: {Client.SoftwareUpdateDownloadProgress}%");
+				WriteLog(ELogType.Info, $"Downloading software update: {Client.SoftwareUpdateDownloadProgress}%");
 				StateString = $"OK (Downloading software update {Client.SoftwareUpdateDownloadProgress}%)";
 
 				_installingSoftwareUpdate = Client.SoftwareUpdateDownloadProgress >= 95 ? DateTime.Now : DateTime.MinValue;
@@ -333,7 +314,7 @@ namespace HSPI_IRobot {
 		private async void HandleDisconnect(object src, EventArgs arg) {
 			Client.OnDisconnected -= HandleDisconnect;
 
-			_plugin.WriteLog(ELogType.Warning, $"Disconnected from robot {Client.Name}");
+			WriteLog(ELogType.Warning, $"Disconnected from robot");
 			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.Ok, "Disconnected");
 
 			await Task.Delay(1000);
@@ -341,7 +322,7 @@ namespace HSPI_IRobot {
 		}
 
 		private void HandleUnexpectedValue(object src, RobotClient.UnexpectedValueEventArgs arg) {
-			_plugin.WriteLog(ELogType.Error, $"Unexpected {arg.ValueType} value: \"{arg.Value}\"");
+			WriteLog(ELogType.Error, $"Unexpected {arg.ValueType} value: \"{arg.Value}\"");
 		}
 
 		public HsFeature GetFeature(FeatureType type) {
@@ -351,7 +332,7 @@ namespace HSPI_IRobot {
 
 			HsFeature feature = _plugin.GetHsController().GetFeatureByAddress($"{Blid}:{type}");
 			if (feature == null) {
-				_plugin.WriteLog(ELogType.Warning, $"Missing feature {type} for robot {Blid}; creating it");
+				WriteLog(ELogType.Warning, $"Missing feature {type} for {Blid}; creating it");
 				FeatureCreator creator = new FeatureCreator(HsDevice);
 				feature = _plugin.GetHsController().GetFeatureByRef(creator.CreateFeature(type));
 			}
@@ -382,7 +363,7 @@ namespace HSPI_IRobot {
 				!Enum.TryParse(GetFeatureValue(FeatureType.Status).ToString(CultureInfo.InvariantCulture), out RobotStatus cycle)
 				|| !Enum.TryParse(GetFeatureValue(FeatureType.JobPhase).ToString(CultureInfo.InvariantCulture), out CleanJobPhase phase)
 			) {
-				_plugin.WriteLog(ELogType.Warning, $"Unable to parse {Blid} status ({GetFeatureValue(FeatureType.Status)}) or phase ({GetFeatureValue(FeatureType.JobPhase)})");
+				WriteLog(ELogType.Warning, $"Unable to parse {Blid} status ({GetFeatureValue(FeatureType.Status)}) or phase ({GetFeatureValue(FeatureType.JobPhase)})");
 				return false;
 			}
 			
@@ -439,13 +420,18 @@ namespace HSPI_IRobot {
 				}
 
 				if (latestVersion != null) {
-					_plugin.WriteLog(ELogType.Debug, $"[{GetName()}] Using latest version {latestVersion} of pmap {pmapId} (replacing version {pmapVersion} in favorite job {jobName})");
+					WriteLog(ELogType.Debug, $"Using latest version {latestVersion} of pmap {pmapId} (replacing version {pmapVersion} in favorite job {jobName})");
 					favorite.Command["user_pmapv_id"] = latestVersion;
 				}
 			}
 
 			Client.CleanCustom(favorite.Command);
 			return true;
+		}
+
+		private void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {
+			// ReSharper disable once ExplicitCallerInfoArgument
+			_plugin.WriteLog(logType, $"[{GetName()}] {message}", lineNumber, caller);
 		}
 
 		public enum HsRobotState {
