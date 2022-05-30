@@ -401,6 +401,26 @@ namespace HSPI_IRobot {
 				favorite.Command.Remove(prop.Name);
 			}
 
+			string pmapVersion = (string) favorite.Command.SelectToken("user_pmapv_id");
+			string pmapId = (string) favorite.Command.SelectToken("pmap_id");
+			JArray pmaps;
+			if (pmapVersion != null && pmapId != null && (pmaps = (JArray) Client.ReportedState.SelectToken("pmaps")) != null) {
+				// Use the latest version of the map
+				string latestVersion = null;
+				
+				foreach (JToken token in pmaps) {
+					latestVersion = (string) token.SelectToken(pmapId);
+					if (latestVersion != null) {
+						break;
+					}
+				}
+
+				if (latestVersion != null) {
+					_plugin.WriteLog(ELogType.Debug, $"[{GetName()}] Using latest version {latestVersion} of pmap {pmapId} (replacing version {pmapVersion} in favorite job {jobName})");
+					favorite.Command["user_pmapv_id"] = latestVersion;
+				}
+			}
+
 			Client.CleanCustom(favorite.Command);
 			return true;
 		}
