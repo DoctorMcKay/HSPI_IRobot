@@ -150,6 +150,9 @@
 							
 							<dt>Robot Type</dt>
 							<dd id="robot-modal-type"></dd>
+							
+							<dt>Supported Settings</dt>
+							<dd id="robot-modal-supported-settings"></dd>
 						</dl>
 						
 						<textarea id="robot-full-status" readonly style="display: none"></textarea>
@@ -294,7 +297,7 @@
 						$col = $('<div class="col-sm-3" />');
 						// Info
 						let $btn = $('<button type="button" class="btn btn-link" />');
-						$btn.click(() => {
+						$btn.click(async () => {
 							$('#robot-full-status').hide();
 							
 							$('#robotInfoModal .modal-title').text(robot.name);
@@ -303,7 +306,11 @@
 							$('#robot-modal-password').text(robot.password);
 							$('#robot-modal-sku').text(robot.sku);
 							$('#robot-modal-type').text(robot.type[0].toUpperCase() + robot.type.substring(1));
+							$('#robot-modal-supported-settings').text('');
 							$('#robotInfoModal').modal();
+							
+							let {supportedOptions} = await ajaxCmd('getRobotSettings', {blid: robot.blid});
+							$('#robot-modal-supported-settings').text(supportedOptions.length == 0 ? 'None' : supportedOptions.join(', '));
 						});
 						$btn.text('Info');
 						$col.append($btn);

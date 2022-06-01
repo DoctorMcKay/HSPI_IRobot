@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Devices;
 using IRobotLANClient;
@@ -24,6 +26,9 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				
 				case "rebootRobot":
 					return _rebootRobot((string) payload.SelectToken("blid"));
+				
+				case "getRobotSettings":
+					return _getRobotSettings((string) payload.SelectToken("blid"));
 				
 				case "cloudLogin":
 					return _cloudLogin((string) payload.SelectToken("username"), (string) payload.SelectToken("password"));
@@ -106,6 +111,28 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			
 			robot.Client.Reboot();
 			return SuccessResponse;
+		}
+
+		private string _getRobotSettings(string blid) {
+			if (blid == null) {
+				return BadCmdResponse;
+			}
+			
+			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
+			if (robot == null) {
+				return ErrorResponse("Invalid blid");
+			}
+			
+			if (robot.Client == null || !robot.Client.Connected) {
+				return ErrorResponse("Not connected");
+			}
+
+			return JsonConvert.SerializeObject(new {
+				supportedOptions = Enum.GetValues(typeof(ConfigOption)).OfType<ConfigOption>()
+					.Where(option => robot.Client.SupportsConfigOption(option))
+					.Select(option => Enum.GetName(typeof(ConfigOption), option))
+					.ToArray()
+			});
 		}
 
 		private string _cloudLogin(string username, string password) {
