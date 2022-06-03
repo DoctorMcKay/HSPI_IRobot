@@ -28,6 +28,7 @@ namespace HSPI_IRobot {
 		public const string PluginId = "iRobot";
 		public override string Name { get; } = "iRobot";
 		public override string Id { get; } = PluginId;
+		public override bool SupportsConfigDevice { get; } = true;
 
 		private bool _debugLogging;
 
@@ -379,6 +380,35 @@ namespace HSPI_IRobot {
 			
 			WriteLog(ELogType.Info, $"Request to save unknown setting {currentView.Id}");
 			return false;
+		}
+
+		public override bool HasJuiDeviceConfigPage(int deviceRef) {
+			return HsRobots.Exists(r => r.HsDeviceRef == deviceRef);
+		}
+
+		public override string GetJuiDeviceConfigPage(int deviceRef) {
+			HsRobot robot = HsRobots.Find(r => r.HsDeviceRef == deviceRef);
+
+			PageFactory factory = PageFactory.CreateDeviceConfigPage("iRobotDevice", "iRobot")
+				.WithLabel("Status", "Status", robot.StateString)
+				.WithLabel("IPAddress", "Address", string.IsNullOrEmpty(robot.ConnectedIp) ? "unknown" : robot.ConnectedIp)
+				.WithLabel("BLID", "BLID", robot.Blid)
+				.WithLabel("SKU", "SKU", robot.Client?.Sku ?? "unknown")
+				.WithLabel("Type", "Robot Type", Enum.GetName(typeof(RobotType), robot.Type))
+				.WithLabel("SoftwareVersion", "Software Version", robot.Client?.SoftwareVersion ?? "unknown")
+				.WithLabel("SupportedSettings", "Supported Settings", string.Join(
+					", ",
+					robot.Client == null || robot.State != HsRobot.HsRobotState.Connected
+						? new[] {"unknown"}
+						: robot.GetSupportedOptions().Length == 0
+							? new[] {"None"}
+							: robot.GetSupportedOptions()
+								.Select(option => Enum.GetName(typeof(ConfigOption), option))
+								.ToArray()
+				))
+				.WithLabel("ManageRobots", "", "<hr /><a href=\"/iRobot/robots.html\">Manage Robots</a>");
+
+			return factory.Page.ToJsonString();
 		}
 
 		protected override void BeforeReturnStatus() {

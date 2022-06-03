@@ -416,6 +416,16 @@ namespace HSPI_IRobot {
 			return true;
 		}
 
+		public ConfigOption[] GetSupportedOptions() {
+			if (Client == null || State != HsRobotState.Connected) {
+				return null;
+			}
+			
+			return Enum.GetValues(typeof(ConfigOption)).OfType<ConfigOption>()
+				.Where(option => Client.SupportsConfigOption(option))
+				.ToArray();
+		}
+
 		private void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {
 			// ReSharper disable once ExplicitCallerInfoArgument
 			_plugin.WriteLog(logType, $"[{GetName()}] {message}", lineNumber, caller);

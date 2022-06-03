@@ -129,8 +129,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			}
 
 			return JsonConvert.SerializeObject(new {
-				supportedOptions = Enum.GetValues(typeof(ConfigOption)).OfType<ConfigOption>()
-					.Where(option => robot.Client.SupportsConfigOption(option))
+				supportedOptions = robot.GetSupportedOptions()
 					.Select(option => Enum.GetName(typeof(ConfigOption), option))
 					.ToArray()
 			});
