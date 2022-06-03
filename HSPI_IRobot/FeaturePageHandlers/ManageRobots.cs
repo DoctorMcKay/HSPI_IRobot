@@ -79,7 +79,8 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 					ip = robot.ConnectedIp,
 					type = robot.Type == RobotType.Vacuum ? "vacuum" : "mop",
 					name = robot.GetName(),
-					sku = robot.Client?.Sku ?? "unknown"
+					sku = robot.Client?.Sku ?? "unknown",
+					softwareVersion = robot.Client?.SoftwareVersion ?? "unknown"
 				})
 			});
 		}

@@ -151,6 +151,9 @@
 							<dt>Robot Type</dt>
 							<dd id="robot-modal-type"></dd>
 							
+							<dt>Software Version</dt>
+							<dd id="robot-modal-software-version"></dd>
+							
 							<dt>Supported Settings</dt>
 							<dd id="robot-modal-supported-settings"></dd>
 						</dl>
@@ -306,6 +309,7 @@
 							$('#robot-modal-password').text(robot.password);
 							$('#robot-modal-sku').text(robot.sku);
 							$('#robot-modal-type').text(robot.type[0].toUpperCase() + robot.type.substring(1));
+							$('#robot-modal-software-version').text(robot.softwareVersion);
 							$('#robot-modal-supported-settings').text('');
 							$('#robotInfoModal').modal();
 							
