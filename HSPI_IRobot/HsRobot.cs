@@ -253,6 +253,11 @@ namespace HSPI_IRobot {
 		}
 
 		private void HandleDataUpdate(object src, EventArgs arg) {
+			if (Client == null) {
+				// This really shouldn't be possible, but just in case it is...
+				return;
+			}
+			
 			// When a robot's state updates, especially when docking after a job is finished, it's possible for it to
 			// rapidly flip between multiple different states. It has been observed that when a robot docks, it rapidly
 			// flips between Clean/UserSentHome to Clean/Stop to Clean/UserSentHome to Clean/Charge to Clean/Run to Clean/Charge
