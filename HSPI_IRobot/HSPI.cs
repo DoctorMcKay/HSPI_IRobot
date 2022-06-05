@@ -486,10 +486,12 @@ namespace HSPI_IRobot {
 			}
 
 			foreach (AbstractView view in changedPage.Views) {
+				#if DEBUG_CLIENT
 				if (view.Id == "SpoofSoftwareUpdate" && view is ToggleView toggleView && toggleView.IsEnabled) {
 					robot.Client.SpoofSoftwareUpdate();
 					continue;
 				}
+				#endif
 				
 				if (!(view is SelectListView listView)) {
 					throw new Exception($"View {view.Id} is not a SelectListView");
