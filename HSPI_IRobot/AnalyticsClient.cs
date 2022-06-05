@@ -110,16 +110,20 @@ namespace HSPI_IRobot {
 		}
 
 		public void WriteLog(ELogType type, string message, int lineNumber, string caller) {
-			_log.AddLast(new LogLine {
-				Type = type.ToString(),
-				Message = message,
-				LineNumber = lineNumber,
-				Caller = caller,
-				Timestamp = DateTime.Now.ToString(CultureInfo.InvariantCulture)
-			});
-			
-			while (_log.Count > 500) {
-				_log.RemoveFirst();
+			try {
+				_log.AddLast(new LogLine {
+					Type = type.ToString(),
+					Message = message,
+					LineNumber = lineNumber,
+					Caller = caller,
+					Timestamp = DateTime.Now.ToString(CultureInfo.InvariantCulture)
+				});
+
+				while (_log.Count > 500) {
+					_log.RemoveFirst();
+				}
+			} catch (Exception) {
+				// If something happens while storing the log line, just silently swallow the error
 			}
 		}
 
