@@ -51,13 +51,17 @@ namespace IRobotLANClient {
 		private bool _awaitingFirstReportTimer;
 		private DateTime _connectedTime;
 
+		#if DEBUG
+		private static bool SpoofingSoftwareUpdate;
+		#endif
+
 		public RobotClient(string address, string blid, string password) {
 			Connected = false;
 			Address = address;
 			Blid = blid;
 			Password = password;
 		}
-		
+
 		public async Task<MqttClientConnectResult> Connect() {
 			MqttFactory factory = new MqttFactory();
 			MqttClient = factory.CreateMqttClient();
@@ -83,11 +87,15 @@ namespace IRobotLANClient {
 			MqttClient.ApplicationMessageReceivedHandler = handler;
 			MqttClient.ConnectedHandler = handler;
 			MqttClient.DisconnectedHandler = handler;
-			
+
 			#if DEBUG
-				Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
-			#endif
+			if (SpoofingSoftwareUpdate) {
+				throw new Exception("Spoofing software update");
+			}
 			
+			Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
+			#endif
+
 			_awaitingFirstReport = true;
 
 			Timer connectTimeout = new Timer {
@@ -96,15 +104,13 @@ namespace IRobotLANClient {
 				Interval = 10000
 			};
 
-			connectTimeout.Elapsed += (sender, args) => {
-				SignalCancellation();
-			};
+			connectTimeout.Elapsed += (sender, args) => SignalCancellation();
 
 			DateTime connectStartTime = DateTime.Now;
 			try {
 				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
 				connectTimeout.Stop();
-				
+
 				_connectedTime = DateTime.Now;
 
 				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
@@ -129,7 +135,7 @@ namespace IRobotLANClient {
 						throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
 					}
 				}
-				
+
 				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 			}
 		}
@@ -170,19 +176,19 @@ namespace IRobotLANClient {
 		public void Stop() {
 			SendCommand("stop");
 		}
-		
+
 		public void Pause() {
 			SendCommand("pause");
 		}
-		
+
 		public void Resume() {
 			SendCommand("resume");
 		}
-		
+
 		public void Dock() {
 			SendCommand("dock");
 		}
-		
+
 		public void Find() {
 			SendCommand("find");
 		}
@@ -220,10 +226,10 @@ namespace IRobotLANClient {
 			switch (option) {
 				case ConfigOption.ChargeLightRingPattern:
 					return (int) (ReportedState.SelectToken("featureFlags.chrgLrPtrnEnable") ?? JToken.FromObject(0)) == 1;
-				
+
 				case ConfigOption.ChildLock:
 					return (int) (ReportedState.SelectToken("featureFlags.childLockEnable") ?? JToken.FromObject(0)) == 1;
-				
+
 				default:
 					return false;
 			}
@@ -236,6 +242,28 @@ namespace IRobotLANClient {
 		public void SetChildLock(bool childLock) {
 			UpdateOption(new {childLock});
 		}
+
+		#if DEBUG
+		public void SpoofSoftwareUpdate() {
+			Console.WriteLine("Spoofing software update");
+
+			SpoofingSoftwareUpdate = true;
+
+			SoftwareUpdateDownloadProgress = 0;
+			Timer timer = new Timer {AutoReset = true, Enabled = true, Interval = 500};
+			timer.Elapsed += async (sender, args) => {
+				SoftwareUpdateDownloadProgress++;
+				OnStateUpdated?.Invoke(this, null);
+
+				if (SoftwareUpdateDownloadProgress >= 100) {
+					timer.Stop();
+					await Disconnect();
+					await Task.Delay(30000);
+					SpoofingSoftwareUpdate = false;
+				}
+			};
+		}
+		#endif
 
 		protected void UpdateOption(object request) {
 			MqttApplicationMessage msg = new MqttApplicationMessage {
@@ -256,11 +284,11 @@ namespace IRobotLANClient {
 
 			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
 
-#if DEBUG
+			#if DEBUG
 			if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
 				Console.WriteLine($"Received message with topic {msg.Topic}");
 			}
-#endif
+			#endif
 
 			if (!isStatusUpdate) {
 				return;
@@ -283,7 +311,7 @@ namespace IRobotLANClient {
 			foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
 				DebugOutput(change);
 			}
-			
+
 			// Some robots don't send their entire state all at once upon connecting, which can cause problems since
 			// a lot of our code expects the entire state to be there once we receive a report. So let's wait 1 second
 			// after receiving the first report for additional reports to come in.
@@ -304,19 +332,19 @@ namespace IRobotLANClient {
 				ProcessStateUpdate();
 			}
 		}
-		
+
 		private void ProcessStateUpdate() {
 			ReportedState state = JsonConvert.DeserializeObject<ReportedState>(ReportedState.ToString());
 			Name = state.Name;
 			Sku = state.Sku;
 			BatteryLevel = state.BatPct;
 			ChildLock = state.ChildLock;
-			
+
 			// This will default to DockingAndCharging if the robot doesn't support light ring patterns, so it's up to
 			// the consumer to check that the robot supports the feature before actually trusting this value.
 			ChargeLightRingPattern = (ChargeLightRingPattern) state.ChrgLrPtrn;
 
-#if DEBUG
+			#if DEBUG
 			/*
 			 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
 			 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
@@ -332,7 +360,7 @@ namespace IRobotLANClient {
 				(int) (ReportedState.SelectToken("cleanMissionStatus.operatingMode") ?? 0),
 				(string) (ReportedState.SelectToken("cleanMissionStatus.initiator") ?? 0)
 			));
-#endif
+			#endif
 
 			string missionCycle = state.CleanMissionStatus?.Cycle ?? "none";
 			string missionPhase = state.CleanMissionStatus?.Phase ?? "stop";
@@ -341,27 +369,27 @@ namespace IRobotLANClient {
 				case "none":
 					Cycle = MissionCycle.None;
 					break;
-					
+
 				case "clean":
 					Cycle = MissionCycle.Clean;
 					break;
-					
+
 				case "spot":
 					Cycle = MissionCycle.Spot;
 					break;
-					
+
 				case "dock":
 					Cycle = MissionCycle.Dock;
 					break;
-					
+
 				case "evac":
 					Cycle = MissionCycle.Evac;
 					break;
-				
+
 				case "train":
 					Cycle = MissionCycle.Train;
 					break;
-					
+
 				default:
 					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionCycle", Value = missionCycle});
 					Cycle = MissionCycle.Unknown;
@@ -372,39 +400,39 @@ namespace IRobotLANClient {
 				case "charge":
 					Phase = MissionPhase.Charge;
 					break;
-					
+
 				case "run":
 					Phase = MissionPhase.Run;
 					break;
-					
+
 				case "stuck":
 					Phase = MissionPhase.Stuck;
 					break;
-					
+
 				case "stop":
 					Phase = MissionPhase.Stop;
 					break;
-					
+
 				case "hmUsrDock":
 					Phase = MissionPhase.UserSentHome;
 					break;
-					
+
 				case "hmPostMsn":
 					Phase = MissionPhase.DockingAfterMission;
 					break;
-				
+
 				case "hmMidMsn":
 					Phase = MissionPhase.DockingMidMission;
 					break;
-					
+
 				case "evac":
 					Phase = MissionPhase.Evac;
 					break;
-				
+
 				case "chargingerror":
 					Phase = MissionPhase.ChargingError;
 					break;
-					
+
 				default:
 					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionPhase", Value = missionPhase});
 					Phase = MissionPhase.Unknown;
@@ -414,15 +442,22 @@ namespace IRobotLANClient {
 			ErrorCode = state.CleanMissionStatus?.Error ?? 0;
 			NotReadyCode = state.CleanMissionStatus?.NotReady ?? 0;
 			CanLearnMaps = state.PmapLearningAllowed;
-			SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
 			SoftwareVersion = state.SoftwareVer;
+
+			#if DEBUG
+			if (!SpoofingSoftwareUpdate) {
+				SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
+			}
+			#else
+			SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
+			#endif
 
 			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
 				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
 			}
-			
+
 			HandleRobotStateUpdate();
-			
+
 			OnStateUpdated?.Invoke(this, null);
 		}
 
@@ -430,9 +465,9 @@ namespace IRobotLANClient {
 
 		internal void ConnectedStateChanged(bool connected) {
 			Connected = connected;
-			
+
 			#if DEBUG
-				Console.WriteLine("MQTT client " + (connected ? "connected" : "disconnected"));
+			Console.WriteLine("MQTT client " + (connected ? "connected" : "disconnected"));
 			#endif
 
 			if (connected) {
@@ -444,7 +479,7 @@ namespace IRobotLANClient {
 		}
 
 		protected void DebugOutput(string output) {
-			OnDebugOutput?.Invoke(this, new DebugOutputEventArgs { Output = output });
+			OnDebugOutput?.Invoke(this, new DebugOutputEventArgs {Output = output});
 		}
 
 		private void SignalCancellation() {

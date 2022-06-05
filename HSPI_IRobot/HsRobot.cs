@@ -23,6 +23,8 @@ namespace HSPI_IRobot {
 		public string ConnectedIp { get; private set; }
 		public RobotClient Client { get; private set; } = null;
 
+		public bool ObservedSoftwareUpdateDownload = false;
+
 		public HsDevice HsDevice => _plugin.GetHsController().GetDeviceByRef(HsDeviceRef);
 		
 		public PlugExtraData PlugExtraData {
@@ -88,6 +90,8 @@ namespace HSPI_IRobot {
 		}
 
 		public async Task AttemptConnect(string ip = null, bool skipStateCheck = false) {
+			ObservedSoftwareUpdateDownload = false;
+			
 			if (State == HsRobotState.Connecting && !skipStateCheck) {
 				WriteLog(ELogType.Warning, "Aborting AttemptConnect because our state is already Connecting");
 				return;

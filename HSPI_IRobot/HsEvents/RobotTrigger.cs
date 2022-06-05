@@ -15,7 +15,8 @@ namespace HSPI_IRobot.HsEvents {
 		
 		protected override List<string> SubTriggerTypeNames { get; set; } = new List<string> {
 			"A robot begins/is navigating the space",
-			"A robot stops/is not navigating the space"
+			"A robot stops/is not navigating the space",
+			"A robot begins/is downloading a software update"
 		};
 
 		private string OptionIdExplainTrigger => $"{PageId}-ExplainTrig";
@@ -26,7 +27,7 @@ namespace HSPI_IRobot.HsEvents {
 		protected override string GetName() => "iRobot: A robot is...";
 		public override bool CanBeCondition => true;
 
-		private SubTrigger? SubTrig {
+		public SubTrigger? SubTrig {
 			get {
 				if (SelectedSubTriggerIndex < 0) {
 					return null;
@@ -69,6 +70,11 @@ namespace HSPI_IRobot.HsEvents {
 					factory.WithLabel(OptionIdExplainTrigger, "When used as a trigger (IF/OR IF)", "Triggers the event when the robot stops driving around your space");
 					factory.WithLabel(OptionIdExplainCondition, "When used as a condition (AND IF)", "Passes when the robot is not currently driving around your space");
 					break;
+				
+				case SubTrigger.IsDownloadingUpdate:
+					factory.WithLabel(OptionIdExplainTrigger, "When used as a trigger (IF/OR IF)", "Triggers the event when the robot begins downloading a software update");
+					factory.WithLabel(OptionIdExplainCondition, "When used as a condition (AND IF)", "Passes when the robot is currently downloading a software update");
+					break;
 			}
 
 			factory.WithDropDownSelectList(OptionIdRobot, "Robot", robotNames, robotIds);
@@ -103,6 +109,10 @@ namespace HSPI_IRobot.HsEvents {
 					case SubTrigger.IsNotNavigating:
 						triggerName = isTrigger ? "stops navigating the space" : "is not navigating the space";
 						break;
+					
+					case SubTrigger.IsDownloadingUpdate:
+						triggerName = isTrigger ? "begins downloading a software update" : "is downloading a software update";
+						break;
 				}
 			}
 			
@@ -120,6 +130,9 @@ namespace HSPI_IRobot.HsEvents {
 				case SubTrigger.IsNotNavigating:
 					// Is not navigating
 					return !robot.IsNavigating();
+				
+				case SubTrigger.IsDownloadingUpdate:
+					return robot.Client != null && robot.State == HsRobot.HsRobotState.Connected && robot.Client.SoftwareUpdateDownloadProgress > 0;
 				
 				default:
 					Plugin.WriteLog(ELogType.Warning, $"Got IsTriggerTrue call for unknown sub-trigger {SelectedSubTriggerIndex}");
@@ -202,7 +215,7 @@ namespace HSPI_IRobot.HsEvents {
 				}
 
 				List<JToken> triggerList = triggers.ToList();
-				JToken trigger = triggerList.Find(trig => (int) trig.SelectToken("mvarTI.UID") == Id);
+				JToken trigger = triggerList.Find(trig => trig.SelectToken("mvarTI.UID") != null && (int) trig.SelectToken("mvarTI.UID") == Id);
 				if (trigger == null) {
 					continue;
 				}
@@ -214,9 +227,10 @@ namespace HSPI_IRobot.HsEvents {
 			return null;
 		}
 
-		private enum SubTrigger : int {
+		public enum SubTrigger : int {
 			IsNavigating = 0,
-			IsNotNavigating
+			IsNotNavigating,
+			IsDownloadingUpdate
 		}
 	}
 }

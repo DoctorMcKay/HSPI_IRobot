@@ -349,7 +349,27 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, $"{robot.GetName()} navigating status changed: {wasNavigating} -> {!wasNavigating}");
 				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
 					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
-					if (trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef) && trigger.IsTriggerTrue(false)) {
+					if (
+						(trigger.SubTrig == RobotTrigger.SubTrigger.IsNavigating || trigger.SubTrig == RobotTrigger.SubTrigger.IsNotNavigating)
+						&& trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef)
+						&& trigger.IsTriggerTrue(false)
+					) {
+						HomeSeerSystem.TriggerFire(Id, trigActInfo);
+					}
+				}
+			}
+			
+			// Are we now downloading a software update?
+			if (robot.Client.SoftwareUpdateDownloadProgress > 0 && !robot.ObservedSoftwareUpdateDownload) {
+				robot.ObservedSoftwareUpdateDownload = true;
+				WriteLog(ELogType.Info, $"{robot.GetName()} is now downloading a software update");
+				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
+					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
+					if (
+						trigger.SubTrig == RobotTrigger.SubTrigger.IsDownloadingUpdate
+						&& trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef)
+						&& trigger.IsTriggerTrue(false)
+					) {
 						HomeSeerSystem.TriggerFire(Id, trigActInfo);
 					}
 				}
@@ -404,7 +424,6 @@ namespace HSPI_IRobot {
 					if (!robot.Client.SupportsConfigOption(option)) {
 						continue;
 					}
-					
 
 					List<string> keys = RobotOptions.GetOptionKeys(option);
 					List<string> labels = RobotOptions.GetOptionLabels(option);
@@ -446,6 +465,10 @@ namespace HSPI_IRobot {
 						keys.IndexOf(currentSetting)
 					);
 				}
+				
+				#if DEBUG_CLIENT
+				factory.WithToggle("SpoofSoftwareUpdate", "Spoof Software Update");
+				#endif
 			}
 
 			factory.WithLabel("ManageRobots", "", "<hr /><a href=\"/iRobot/robots.html\">Manage Robots</a>");
@@ -463,6 +486,11 @@ namespace HSPI_IRobot {
 			}
 
 			foreach (AbstractView view in changedPage.Views) {
+				if (view.Id == "SpoofSoftwareUpdate" && view is ToggleView toggleView && toggleView.IsEnabled) {
+					robot.Client.SpoofSoftwareUpdate();
+					continue;
+				}
+				
 				if (!(view is SelectListView listView)) {
 					throw new Exception($"View {view.Id} is not a SelectListView");
 				}
