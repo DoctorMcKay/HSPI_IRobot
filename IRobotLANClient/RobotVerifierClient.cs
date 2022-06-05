@@ -32,7 +32,10 @@ namespace IRobotLANClient {
 			_taskCompletionSource = new TaskCompletionSource<RobotType>();
 
 			Timer timeout = new Timer {Enabled = true, AutoReset = false, Interval = 10000};
-			timeout.Elapsed += (sender, args) => _taskCompletionSource.TrySetCanceled();
+			timeout.Elapsed += (sender, args) => {
+				timeout.Dispose();
+				_taskCompletionSource.TrySetCanceled();
+			};
 
 			return _taskCompletionSource.Task;
 		}

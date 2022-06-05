@@ -57,19 +57,16 @@ namespace HSPI_IRobot {
 				try {
 					ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
 
-					HttpClient client = new HttpClient();
-					HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ErrorReportUrl) {
-						Content = new StringContent(JsonConvert.SerializeObject(new {
+					using (HttpClient client = new HttpClient()) {
+						StringContent content = new StringContent(JsonConvert.SerializeObject(new {
 							AnalyticsData = _gatherData(),
 							Exception = exception
-						}), Encoding.UTF8, "application/json")
-					};
+						}), Encoding.UTF8, "application/json");
 
-					HttpResponseMessage res = await client.SendAsync(req);
-
-					req.Dispose();
-					res.Dispose();
-					client.Dispose();
+						using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ErrorReportUrl) {Content = content}) {
+							(await client.SendAsync(req)).Dispose();
+						}
+					}
 				} finally {
 					// re-throw the exception
 					throw exception;
@@ -77,27 +74,24 @@ namespace HSPI_IRobot {
 			}).Wait();
 		}
 
-		public void ReportIn(int milliseconds) {
-			Timer timer = new Timer(milliseconds) {Enabled = true, AutoReset = false};
-			timer.Elapsed += (src, arg) => {
-				Report();
-			};
+		public async void ReportIn(int milliseconds) {
+			await Task.Delay(milliseconds);
+			Report();
 		}
 
 		public async void Report() {
 			try {
 				ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-				
-				HttpClient client = new HttpClient();
-				HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ReportUrl) {
-					Content = new StringContent(JsonConvert.SerializeObject(_gatherData()), Encoding.UTF8, "application/json")
-				};
-				HttpResponseMessage res = await client.SendAsync(req);
-				_plugin.WriteLog(ELogType.Trace, $"Analytics report: {res.StatusCode}");
-				
-				req.Dispose();
-				res.Dispose();
-				client.Dispose();
+
+				using (HttpClient client = new HttpClient()) {
+					StringContent content = new StringContent(JsonConvert.SerializeObject(_gatherData()), Encoding.UTF8, "application/json");
+					
+					using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ReportUrl) {Content = content}) {
+						using (HttpResponseMessage res = await client.SendAsync(req)) {
+							_plugin.WriteLog(ELogType.Trace, $"Analytics report: {res.StatusCode}");
+						}
+					}
+				}
 			} catch (Exception ex) {
 				string errMsg = ex.Message;
 				Exception inner = ex;

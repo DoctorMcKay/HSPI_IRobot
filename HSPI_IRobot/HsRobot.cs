@@ -210,6 +210,7 @@ namespace HSPI_IRobot {
 
 		public async void Disconnect() {
 			_reconnectTimer?.Stop();
+			_reconnectTimer?.Dispose();
 			
 			if (Client != null) {
 				Client.OnDisconnected -= HandleDisconnect;
@@ -219,6 +220,8 @@ namespace HSPI_IRobot {
 
 		private void EnqueueReconnectAttempt() {
 			_reconnectTimer?.Stop();
+			_reconnectTimer?.Dispose();
+			
 			_reconnectTimer = new Timer {
 				AutoReset = false,
 				Enabled = true,
@@ -294,12 +297,15 @@ namespace HSPI_IRobot {
 			_lastObservedMissionPhase = Client.Phase;
 
 			_stateUpdateDebounceTimer?.Stop();
+			_stateUpdateDebounceTimer?.Dispose();
+			
 			_stateUpdateDebounceTimer = new Timer {
 				AutoReset = false,
 				Enabled = true,
 				Interval = debounceTimerInterval
 			};
 			_stateUpdateDebounceTimer.Elapsed += (sender, args) => {
+				_stateUpdateDebounceTimer.Dispose();
 				_stateUpdateDebounceTimer = null;
 				OnRobotStatusUpdated?.Invoke(this, null);
 			};
