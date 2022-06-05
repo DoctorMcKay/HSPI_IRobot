@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Devices;
@@ -20,6 +20,7 @@ using IRobotLANClient.Enums;
 using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
@@ -395,20 +396,100 @@ namespace HSPI_IRobot {
 				.WithLabel("BLID", "BLID", robot.Blid)
 				.WithLabel("SKU", "SKU", robot.Client?.Sku ?? "unknown")
 				.WithLabel("Type", "Robot Type", Enum.GetName(typeof(RobotType), robot.Type))
-				.WithLabel("SoftwareVersion", "Software Version", robot.Client?.SoftwareVersion ?? "unknown")
-				.WithLabel("SupportedSettings", "Supported Settings", string.Join(
-					", ",
-					robot.Client == null || robot.State != HsRobot.HsRobotState.Connected
-						? new[] {"unknown"}
-						: robot.GetSupportedOptions().Length == 0
-							? new[] {"None"}
-							: robot.GetSupportedOptions()
-								.Select(option => Enum.GetName(typeof(ConfigOption), option))
-								.ToArray()
-				))
-				.WithLabel("ManageRobots", "", "<hr /><a href=\"/iRobot/robots.html\">Manage Robots</a>");
+				.WithLabel("SoftwareVersion", "Software Version", robot.Client?.SoftwareVersion ?? "unknown");
+			
+			// If we're connected, add settings
+			if (robot.State == HsRobot.HsRobotState.Connected && robot.Client != null) {
+				foreach (ConfigOption option in Enum.GetValues(typeof(ConfigOption))) {
+					if (!robot.Client.SupportsConfigOption(option)) {
+						continue;
+					}
+					
 
+					List<string> keys = RobotOptions.GetOptionKeys(option);
+					List<string> labels = RobotOptions.GetOptionLabels(option);
+					string currentSetting;
+					switch (option) {
+						case ConfigOption.ChargeLightRingPattern:
+							currentSetting = ((int) robot.Client.ChargeLightRingPattern).ToString();
+							break;
+						
+						case ConfigOption.ChildLock:
+							currentSetting = robot.Client.ChildLock ? "1" : "0";
+							break;
+						
+						case ConfigOption.BinFullPause:
+							currentSetting = ((RobotVacuumClient) robot.Client).BinFullPause ? "1" : "0";
+							break;
+						
+						case ConfigOption.CleaningPassMode:
+							currentSetting = ((int) ((RobotVacuumClient) robot.Client).CleaningPassMode).ToString();
+							break;
+						
+						case ConfigOption.WetMopPadWetness:
+							currentSetting = ((RobotMopClient) robot.Client).WetMopPadWetness.ToString();
+							break;
+						
+						case ConfigOption.WetMopPassOverlap:
+							currentSetting = ((RobotMopClient) robot.Client).WetMopRankOverlap.ToString();
+							break;
+						
+						default:
+							continue;
+					}
+					
+					factory.WithDropDownSelectList(
+						Enum.GetName(typeof(ConfigOption), option),
+						RobotOptions.GetOptionName(option),
+						labels,
+						keys,
+						keys.IndexOf(currentSetting)
+					);
+				}
+			}
+
+			factory.WithLabel("ManageRobots", "", "<hr /><a href=\"/iRobot/robots.html\">Manage Robots</a>");
 			return factory.Page.ToJsonString();
+		}
+
+		protected override bool OnDeviceConfigChange(Page changedPage, int deviceOrFeatureRef) {
+			HsRobot robot = HsRobots.Find(r => r.HsDeviceRef == deviceOrFeatureRef);
+			if (robot == null) {
+				return false;
+			}
+
+			if (robot.Client == null || robot.State != HsRobot.HsRobotState.Connected) {
+				throw new Exception("Robot is not currently connected");
+			}
+
+			foreach (AbstractView view in changedPage.Views) {
+				if (!(view is SelectListView listView)) {
+					throw new Exception($"View {view.Id} is not a SelectListView");
+				}
+
+				if (!Enum.TryParse(listView.Id, out ConfigOption option)) {
+					throw new Exception($"View ID {listView.Id} is not a valid ConfigOption");
+				}
+
+				if (listView.Selection == -1) {
+					throw new Exception($"Cannot unset setting value {listView.Id}");
+				}
+				
+				string newValue = RobotOptions.GetOptionKeys(option)[listView.Selection];
+				WriteLog(ELogType.Trace, $"Requested to change {option} to {newValue} on {robot.GetName()}");
+
+				if (!int.TryParse(newValue, out int settingValue)) {
+					throw new Exception("Setting value is not an integer");
+				}
+
+				if (!RobotOptions.ChangeSetting(robot, option, settingValue)) {
+					return false;
+				}
+			}
+			
+			// Sleep for a second so we don't refresh and see an old value
+			Thread.Sleep(1000);
+			return true;
 		}
 
 		protected override void BeforeReturnStatus() {

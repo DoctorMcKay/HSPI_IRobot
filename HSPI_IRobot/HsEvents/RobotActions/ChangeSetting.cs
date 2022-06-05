@@ -27,35 +27,7 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
             	}
 
             	optionKeys.Add(((int) option).ToString());
-            	switch (option) {
-            		case ConfigOption.ChargeLightRingPattern:
-            			optionLabels.Add("On-dock light ring pattern");
-            			break;
-            		
-            		case ConfigOption.ChildLock:
-            			optionLabels.Add("Child lock");
-            			break;
-            		
-            		case ConfigOption.BinFullPause:
-            			optionLabels.Add("Bin full behavior");
-            			break;
-            		
-            		case ConfigOption.CleaningPassMode:
-            			optionLabels.Add("Cleaning passes");
-            			break;
-            		
-            		case ConfigOption.WetMopPadWetness:
-            			optionLabels.Add("Jet spray amount");
-            			break;
-            		
-            		case ConfigOption.WetMopPassOverlap:
-            			optionLabels.Add("Wet mopping behavior");
-            			break;
-            		
-            		default:
-            			optionLabels.Add(option.ToString());
-            			break;
-            	}
+                optionLabels.Add(RobotOptions.GetOptionName(option));
             }
 
             if (optionKeys.Count == 0) {
@@ -96,69 +68,8 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 				}
 
 				ConfigOption option = (ConfigOption) parsedInt;
-				List<string> optionKeys = new List<string>();
-				List<string> optionLabels = new List<string>();
-				switch (option) {
-					case ConfigOption.ChargeLightRingPattern:
-						optionKeys.Add(((int) ChargeLightRingPattern.DockingAndCharging).ToString());
-						optionLabels.Add("Docking & charging status");
-						
-						optionKeys.Add(((int) ChargeLightRingPattern.Docking).ToString());
-						optionLabels.Add("Docking status");
-						
-						optionKeys.Add(((int) ChargeLightRingPattern.None).ToString());
-						optionLabels.Add("No status lights");
-						break;
-					
-					case ConfigOption.ChildLock:
-						optionKeys.Add("0");
-						optionLabels.Add("Off");
-						
-						optionKeys.Add("1");
-						optionLabels.Add("On");
-						break;
-					
-					case ConfigOption.BinFullPause:
-						optionKeys.Add("1");
-						optionLabels.Add("Do not clean when full");
-						
-						optionKeys.Add("0");
-						optionLabels.Add("Keep cleaning when full");
-						break;
-					
-					case ConfigOption.CleaningPassMode:
-						optionKeys.Add(((int) CleaningPassMode.AutoPass).ToString());
-						optionLabels.Add("Room-size clean (auto depending on room size)");
-						
-						optionKeys.Add(((int) CleaningPassMode.OnePass).ToString());
-						optionLabels.Add("Daily clean (one pass)");
-						
-						optionKeys.Add(((int) CleaningPassMode.TwoPass).ToString());
-						optionLabels.Add("Extra clean (two passes)");
-						break;
-					
-					case ConfigOption.WetMopPadWetness:
-						optionKeys.Add("1");
-						optionLabels.Add("Low");
-						
-						optionKeys.Add("2");
-						optionLabels.Add("Medium");
-						
-						optionKeys.Add("3");
-						optionLabels.Add("High");
-						break;
-					
-					case ConfigOption.WetMopPassOverlap:
-						optionKeys.Add("67");
-						optionLabels.Add("Standard");
-
-						optionKeys.Add("85");
-						optionLabels.Add("Deep");
-
-						optionKeys.Add("25");
-						optionLabels.Add("Extended coverage");
-						break;
-				}
+				List<string> optionKeys = RobotOptions.GetOptionKeys(option);
+				List<string> optionLabels = RobotOptions.GetOptionLabels(option);
 
 				string chosenSettingName = settingView.Options[selection];
 				SelectListView optionView = new SelectListView(OptionIdRobotSettingValue, chosenSettingName, optionLabels, optionKeys);
@@ -202,34 +113,7 @@ namespace HSPI_IRobot.HsEvents.RobotActions {
 				return false;
 			}
 
-			switch ((ConfigOption) settingKeyInt) {
-				case ConfigOption.ChargeLightRingPattern:
-					Robot.Client.SetChargeLightRingPattern((ChargeLightRingPattern) settingValueInt);
-					return true;
-				
-				case ConfigOption.ChildLock:
-					Robot.Client.SetChildLock(settingValueInt != 0);
-					return true;
-				
-				case ConfigOption.BinFullPause:
-					((RobotVacuumClient) Robot.Client).SetBinFullPause(settingValueInt != 0);
-					return true;
-				
-				case ConfigOption.CleaningPassMode:
-					((RobotVacuumClient) Robot.Client).SetCleaningPassMode((CleaningPassMode) settingValueInt);
-					return true;
-				
-				case ConfigOption.WetMopPadWetness:
-					((RobotMopClient) Robot.Client).SetWetMopPadWetness((byte) settingValueInt);
-					return true;
-				
-				case ConfigOption.WetMopPassOverlap:
-					((RobotMopClient) Robot.Client).SetWetMopRankOverlap((byte) settingValueInt);
-					return true;
-				
-				default:
-					return false;
-			}
+			return RobotOptions.ChangeSetting(Robot, (ConfigOption) settingKeyInt, settingValueInt);
 		}
 	}
 }
