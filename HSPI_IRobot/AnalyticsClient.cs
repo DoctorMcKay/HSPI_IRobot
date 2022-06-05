@@ -34,12 +34,11 @@ namespace HSPI_IRobot {
 
 		private readonly HSPI _plugin;
 		private readonly IHsController _hs;
-		private readonly LinkedList<object> _log;
+		private readonly LinkedList<object> _log = new LinkedList<object>();
 
 		public AnalyticsClient(HSPI plugin, IHsController hs) {
 			_plugin = plugin;
 			_hs = hs;
-			_log = new LinkedList<object>();
 
 			if (!Debugger.IsAttached) {
 				AppDomain.CurrentDomain.UnhandledException += (_, args) => {

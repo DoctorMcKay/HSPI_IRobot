@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient {
@@ -90,7 +91,13 @@ namespace IRobotLANClient {
 		}
 
 		private DiscoveredRobot _parseRobot(byte[] receiveBuffer) {
-			JObject payload = JObject.Parse(Encoding.UTF8.GetString(receiveBuffer));
+			JObject payload;
+			try {
+				payload = JObject.Parse(Encoding.UTF8.GetString(receiveBuffer));
+			} catch (JsonReaderException) {
+				return null;
+			}
+
 			int.TryParse((string) payload.SelectToken("ver"), out int versionNumber);
 
 			string blid = (string) payload.SelectToken("robotid");
