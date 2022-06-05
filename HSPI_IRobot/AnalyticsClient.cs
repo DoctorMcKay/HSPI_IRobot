@@ -34,7 +34,7 @@ namespace HSPI_IRobot {
 
 		private readonly HSPI _plugin;
 		private readonly IHsController _hs;
-		private readonly LinkedList<object> _log = new LinkedList<object>();
+		private readonly LinkedList<LogLine> _log = new LinkedList<LogLine>();
 
 		public AnalyticsClient(HSPI plugin, IHsController hs) {
 			_plugin = plugin;
