@@ -30,8 +30,8 @@ jobs:
       
     - name: MSBuild
       run: |
-        msbuild /p:Configuration=Debug HSPI_IRobot.sln
-        msbuild /p:Configuration=Release HSPI_IRobot.sln
+        msbuild /p:Configuration=Debug /m HSPI_IRobot.sln
+        msbuild /p:Configuration=Release /m HSPI_IRobot.sln
         
     - name: Stage artifacts
       run: |

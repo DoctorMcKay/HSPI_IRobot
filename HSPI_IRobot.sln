@@ -16,6 +16,7 @@ Global
 		{8545D6F3-59DC-432C-88F4-4CF3E2063BE2}.Debug Plugin and Client|Any CPU.ActiveCfg = Debug Plugin and Client|Any CPU
 		{8545D6F3-59DC-432C-88F4-4CF3E2063BE2}.Debug Plugin and Client|Any CPU.Build.0 = Debug Plugin and Client|Any CPU
 		{8545D6F3-59DC-432C-88F4-4CF3E2063BE2}.Debug|Any CPU.ActiveCfg = Debug Plugin|Any CPU
+		{8545D6F3-59DC-432C-88F4-4CF3E2063BE2}.Debug|Any CPU.Build.0 = Debug Plugin|Any CPU
 		{64AC7D81-2BB0-437A-8EE9-59A1EC5692F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{64AC7D81-2BB0-437A-8EE9-59A1EC5692F1}.Release|Any CPU.Build.0 = Release|Any CPU
 		{64AC7D81-2BB0-437A-8EE9-59A1EC5692F1}.Debug Plugin and Client|Any CPU.ActiveCfg = Debug|Any CPU
