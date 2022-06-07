@@ -58,6 +58,9 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 		}
 
 		protected void SetResult(string cmd, object result) {
+			// If a job is likely to take a while (e.g. logging into the iRobot cloud), we can't block the request
+			// while we do it. Doing so will block the plugin's connection to HS4, preventing any status updates
+			// (or anything else) from going through. So instead let's poll for results to long-running jobs.
 			SetResult(cmd, JsonConvert.SerializeObject(result));
 		}
 

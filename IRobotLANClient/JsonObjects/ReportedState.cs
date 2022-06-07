@@ -1,5 +1,4 @@
 ﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient.JsonObjects {
 	[JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
@@ -8,8 +7,11 @@ namespace IRobotLANClient.JsonObjects {
 		[JsonProperty("sku")] public string Sku;
 		[JsonProperty("batPct")] public byte BatPct;
 		[JsonProperty("childLock")] public bool ChildLock;
+		[JsonProperty("chrgLrPtrn")] public byte ChrgLrPtrn;
 		[JsonProperty("cleanMissionStatus")] public CleanMissionStatusType CleanMissionStatus;
 		[JsonProperty("pmapLearningAllowed")] public bool PmapLearningAllowed;
+		[JsonProperty("otaDownloadProgress")] public byte OtaDownloadProgress;
+		[JsonProperty("softwareVer")] public string SoftwareVer;
 
 		public class CleanMissionStatusType {
 			[JsonProperty("cycle")] public string Cycle;

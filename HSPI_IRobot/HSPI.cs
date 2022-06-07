@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using HomeSeer.Jui.Views;
 using HomeSeer.PluginSdk;
 using HomeSeer.PluginSdk.Devices;
@@ -17,8 +17,10 @@ using HSPI_IRobot.FeaturePageHandlers;
 using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
@@ -27,6 +29,7 @@ namespace HSPI_IRobot {
 		public const string PluginId = "iRobot";
 		public override string Name { get; } = "iRobot";
 		public override string Id { get; } = PluginId;
+		public override bool SupportsConfigDevice { get; } = true;
 
 		private bool _debugLogging;
 
@@ -39,7 +42,7 @@ namespace HSPI_IRobot {
 
 		protected override void Initialize() {
 			string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(Robot)).Location).FileVersion;
+			string irobotClientVersion = FileVersionInfo.GetVersionInfo(Assembly.GetAssembly(typeof(RobotClient)).Location).FileVersion;
 
 #if DEBUG
 			WriteLog(ELogType.Info, $"Plugin version {pluginVersion} starting with client version {irobotClientVersion}");
@@ -79,7 +82,7 @@ namespace HSPI_IRobot {
 			
 			// Set up event triggers and actions
 			TriggerTypes.AddTriggerType(typeof(RobotTrigger));
-			ActionTypes.AddActionType(typeof(StartFavoriteJobAction));
+			ActionTypes.AddActionType(typeof(RobotAction));
 			
 			_analyticsClient.ReportIn(5000);
 		}
@@ -104,8 +107,7 @@ namespace HSPI_IRobot {
 			robot.OnRobotStatusUpdated += HandleRobotStatusUpdate;
 
 			await robot.AttemptConnect();
-			string robotName = robot.State == HsRobot.HsRobotState.Connected ? robot.Robot.Name : robot.Blid;
-			WriteLog(ELogType.Debug, $"Initial connection attempt to {robotName} finished with new state {robot.State} ({robot.StateString})");
+			WriteLog(ELogType.Debug, $"Initial connection attempt to {robot.GetName()} finished with new state {robot.State} ({robot.StateString})");
 
 			if (robot.State == HsRobot.HsRobotState.Connected) {
 				PlugExtraData ped = robot.PlugExtraData;
@@ -124,7 +126,7 @@ namespace HSPI_IRobot {
 				HsFeature feature = HomeSeerSystem.GetFeatureByRef(ctrl.TargetRef);
 				string[] addressParts = feature.Address.Split(':');
 				HsRobot robot = HsRobots.Find(r => r.Blid == addressParts[0]);
-				if (robot?.Robot == null) {
+				if (robot?.Client == null) {
 					WriteLog(ELogType.Warning, $"Got SetIOMulti {ctrl.TargetRef} = {ctrl.ControlValue}, but no such robot found or not connected");
 					continue;
 				}
@@ -132,39 +134,39 @@ namespace HSPI_IRobot {
 				RobotStatus command = (RobotStatus) ctrl.ControlValue;
 				switch (command) {
 					case RobotStatus.Clean:
-						robot.Robot.Clean();
+						robot.Client.Clean();
 						break;
 					
 					case RobotStatus.OffBaseNoJob:
-						robot.Robot.Stop();
+						robot.Client.Stop();
 						break;
 					
 					case RobotStatus.JobPaused:
-						robot.Robot.Pause();
+						robot.Client.Pause();
 						break;
 					
 					case RobotStatus.Resume:
-						robot.Robot.Resume();
+						robot.Client.Resume();
 						break;
 					
 					case RobotStatus.DockManually:
-						robot.Robot.Dock();
+						robot.Client.Dock();
 						break;
 					
 					case RobotStatus.Find:
-						robot.Robot.Find();
+						robot.Client.Find();
 						break;
 					
 					case RobotStatus.Evac:
 						if (robot.Type == RobotType.Vacuum) {
-							RobotVacuum roboVac = (RobotVacuum) robot.Robot;
+							RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
 							roboVac.Evac();
 						}
 
 						break;
 					
 					case RobotStatus.Train:
-						robot.Robot.Train();
+						robot.Client.Train();
 						break;
 				}
 			}
@@ -207,21 +209,21 @@ namespace HSPI_IRobot {
 
 		private void HandleRobotStatusUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
-			WriteLog(ELogType.Debug, $"Robot {robot.Robot.Name} updated: battery {robot.Robot.BatteryLevel}; cycle {robot.Robot.Cycle}; phase {robot.Robot.Phase}");
+			WriteLog(ELogType.Debug, $"Robot {robot.Client.Name} updated: battery {robot.Client.BatteryLevel}; cycle {robot.Client.Cycle}; phase {robot.Client.Phase}");
 
 			bool wasNavigating = robot.IsNavigating();
 
 			// Features common to all robot types
 			// Status
 			RobotStatus status = RobotStatus.OffBaseNoJob;
-			switch (robot.Robot.Cycle) {
+			switch (robot.Client.Cycle) {
 				case MissionCycle.None:
-					status = robot.Robot.Phase == MissionPhase.Stop ? RobotStatus.OffBaseNoJob : RobotStatus.OnBase;
+					status = robot.Client.Phase == MissionPhase.Stop ? RobotStatus.OffBaseNoJob : RobotStatus.OnBase;
 					break;
 				
 				case MissionCycle.Clean:
 				case MissionCycle.Spot:
-					switch (robot.Robot.Phase) {
+					switch (robot.Client.Phase) {
 						case MissionPhase.Stop:
 							status = RobotStatus.JobPaused;
 							break;
@@ -245,7 +247,7 @@ namespace HSPI_IRobot {
 					break;
 			}
 
-			if (robot.Robot.Phase == MissionPhase.Stuck) {
+			if (robot.Client.Phase == MissionPhase.Stuck) {
 				// Regardless of what our cycle is, if we're stuck we're stuck
 				status = RobotStatus.Stuck;
 			}
@@ -265,7 +267,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotStatus.Clean:
-					switch (robot.Robot.Phase) {
+					switch (robot.Client.Phase) {
 						case MissionPhase.Charge:
 							jobPhase = CleanJobPhase.Charging;
 							break;
@@ -302,25 +304,25 @@ namespace HSPI_IRobot {
 			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) jobPhase);
 			
 			// Battery
-			bool isCharging = robot.Robot.BatteryLevel < 100 && robot.Robot.Phase == MissionPhase.Charge;
+			bool isCharging = robot.Client.BatteryLevel < 100 && robot.Client.Phase == MissionPhase.Charge;
 			feature = robot.GetFeature(FeatureType.Battery);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.BatteryLevel);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.BatteryLevel);
 			HomeSeerSystem.UpdateFeatureValueStringByRef(
 				feature.Ref,
-				isCharging ? $"{robot.Robot.BatteryLevel}% (charging)" : ""
+				isCharging ? $"{robot.Client.BatteryLevel}% (charging)" : ""
 			);
 			
 			// Ready
 			feature = robot.GetFeature(FeatureType.Ready);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.NotReadyCode);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.NotReadyCode);
 			
 			// Error
 			feature = robot.GetFeature(FeatureType.Error);
-			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Robot.ErrorCode);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.ErrorCode);
 
 			switch (robot.Type) {
 				case RobotType.Vacuum:
-					RobotVacuum roboVac = (RobotVacuum) robot.Robot;
+					RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
 					
 					// Bin
 					feature = robot.GetFeature(FeatureType.VacuumBin);
@@ -329,7 +331,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotType.Mop:
-					RobotMop roboMop = (RobotMop) robot.Robot;
+					RobotMopClient roboMop = (RobotMopClient) robot.Client;
 					
 					// Tank
 					feature = robot.GetFeature(FeatureType.MopTank);
@@ -347,7 +349,27 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, $"{robot.GetName()} navigating status changed: {wasNavigating} -> {!wasNavigating}");
 				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
 					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
-					if (trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef) && trigger.IsTriggerTrue(false)) {
+					if (
+						(trigger.SubTrig == RobotTrigger.SubTrigger.IsNavigating || trigger.SubTrig == RobotTrigger.SubTrigger.IsNotNavigating)
+						&& trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef)
+						&& trigger.IsTriggerTrue(false)
+					) {
+						HomeSeerSystem.TriggerFire(Id, trigActInfo);
+					}
+				}
+			}
+			
+			// Are we now downloading a software update?
+			if (robot.Client.SoftwareUpdateDownloadProgress > 0 && !robot.ObservedSoftwareUpdateDownload) {
+				robot.ObservedSoftwareUpdateDownload = true;
+				WriteLog(ELogType.Info, $"{robot.GetName()} is now downloading a software update");
+				foreach (TrigActInfo trigActInfo in HomeSeerSystem.GetTriggersByType(Id, RobotTrigger.TriggerNumber)) {
+					RobotTrigger trigger = new RobotTrigger(trigActInfo, this, _debugLogging);
+					if (
+						trigger.SubTrig == RobotTrigger.SubTrigger.IsDownloadingUpdate
+						&& trigger.ReferencesDeviceOrFeature(robot.HsDeviceRef)
+						&& trigger.IsTriggerTrue(false)
+					) {
 						HomeSeerSystem.TriggerFire(Id, trigActInfo);
 					}
 				}
@@ -381,6 +403,125 @@ namespace HSPI_IRobot {
 			return false;
 		}
 
+		public override bool HasJuiDeviceConfigPage(int deviceRef) {
+			return HsRobots.Exists(r => r.HsDeviceRef == deviceRef);
+		}
+
+		public override string GetJuiDeviceConfigPage(int deviceRef) {
+			HsRobot robot = HsRobots.Find(r => r.HsDeviceRef == deviceRef);
+
+			PageFactory factory = PageFactory.CreateDeviceConfigPage("iRobotDevice", "iRobot")
+				.WithLabel("Status", "Status", robot.StateString)
+				.WithLabel("IPAddress", "Address", string.IsNullOrEmpty(robot.ConnectedIp) ? "unknown" : robot.ConnectedIp)
+				.WithLabel("BLID", "BLID", robot.Blid)
+				.WithLabel("SKU", "SKU", robot.Client?.Sku ?? "unknown")
+				.WithLabel("Type", "Robot Type", Enum.GetName(typeof(RobotType), robot.Type))
+				.WithLabel("SoftwareVersion", "Software Version", robot.Client?.SoftwareVersion ?? "unknown");
+			
+			// If we're connected, add settings
+			if (robot.State == HsRobot.HsRobotState.Connected && robot.Client != null) {
+				foreach (ConfigOption option in Enum.GetValues(typeof(ConfigOption))) {
+					if (!robot.Client.SupportsConfigOption(option)) {
+						continue;
+					}
+
+					List<string> keys = RobotOptions.GetOptionKeys(option);
+					List<string> labels = RobotOptions.GetOptionLabels(option);
+					string currentSetting;
+					switch (option) {
+						case ConfigOption.ChargeLightRingPattern:
+							currentSetting = ((int) robot.Client.ChargeLightRingPattern).ToString();
+							break;
+						
+						case ConfigOption.ChildLock:
+							currentSetting = robot.Client.ChildLock ? "1" : "0";
+							break;
+						
+						case ConfigOption.BinFullPause:
+							currentSetting = ((RobotVacuumClient) robot.Client).BinFullPause ? "1" : "0";
+							break;
+						
+						case ConfigOption.CleaningPassMode:
+							currentSetting = ((int) ((RobotVacuumClient) robot.Client).CleaningPassMode).ToString();
+							break;
+						
+						case ConfigOption.WetMopPadWetness:
+							currentSetting = ((RobotMopClient) robot.Client).WetMopPadWetness.ToString();
+							break;
+						
+						case ConfigOption.WetMopPassOverlap:
+							currentSetting = ((RobotMopClient) robot.Client).WetMopRankOverlap.ToString();
+							break;
+						
+						default:
+							continue;
+					}
+					
+					factory.WithDropDownSelectList(
+						Enum.GetName(typeof(ConfigOption), option),
+						RobotOptions.GetOptionName(option),
+						labels,
+						keys,
+						keys.IndexOf(currentSetting)
+					);
+				}
+				
+				#if DEBUG_CLIENT
+				factory.WithToggle("SpoofSoftwareUpdate", "Spoof Software Update");
+				#endif
+			}
+
+			factory.WithLabel("ManageRobots", "", "<hr /><a href=\"/iRobot/robots.html\">Manage Robots</a>");
+			return factory.Page.ToJsonString();
+		}
+
+		protected override bool OnDeviceConfigChange(Page changedPage, int deviceOrFeatureRef) {
+			HsRobot robot = HsRobots.Find(r => r.HsDeviceRef == deviceOrFeatureRef);
+			if (robot == null) {
+				return false;
+			}
+
+			if (robot.Client == null || robot.State != HsRobot.HsRobotState.Connected) {
+				throw new Exception("Robot is not currently connected");
+			}
+
+			foreach (AbstractView view in changedPage.Views) {
+				#if DEBUG_CLIENT
+				if (view.Id == "SpoofSoftwareUpdate" && view is ToggleView toggleView && toggleView.IsEnabled) {
+					robot.Client.SpoofSoftwareUpdate();
+					continue;
+				}
+				#endif
+				
+				if (!(view is SelectListView listView)) {
+					throw new Exception($"View {view.Id} is not a SelectListView");
+				}
+
+				if (!Enum.TryParse(listView.Id, out ConfigOption option)) {
+					throw new Exception($"View ID {listView.Id} is not a valid ConfigOption");
+				}
+
+				if (listView.Selection == -1) {
+					throw new Exception($"Cannot unset setting value {listView.Id}");
+				}
+				
+				string newValue = RobotOptions.GetOptionKeys(option)[listView.Selection];
+				WriteLog(ELogType.Trace, $"Requested to change {option} to {newValue} on {robot.GetName()}");
+
+				if (!int.TryParse(newValue, out int settingValue)) {
+					throw new Exception("Setting value is not an integer");
+				}
+
+				if (!RobotOptions.ChangeSetting(robot, option, settingValue)) {
+					return false;
+				}
+			}
+			
+			// Sleep for a second so we don't refresh and see an old value
+			Thread.Sleep(1000);
+			return true;
+		}
+
 		protected override void BeforeReturnStatus() {
 			
 		}
@@ -406,11 +547,11 @@ namespace HSPI_IRobot {
 
 		public async Task<string> AddNewRobot(string ip, string blid, string password) {
 			// First things first, let's try to connect and see if we can
-			RobotVerifier verifier = null;
+			RobotVerifierClient verifier = null;
 			try {
 				WriteLog(ELogType.Debug, $"Adding new robot with IP {ip} and BLID {blid}");
 
-				verifier = new RobotVerifier(ip, blid, password);
+				verifier = new RobotVerifierClient(ip, blid, password);
 				verifier.OnDebugOutput += (sender, args) => WriteLog(ELogType.Debug, $"[V:{blid}] {args.Output}");
 				await verifier.Connect();
 
@@ -427,8 +568,9 @@ namespace HSPI_IRobot {
 					return "Unrecognized robot type";
 				}
 
-				Timer timer = new Timer {AutoReset = false, Enabled = true, Interval = 1000};
-				timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
+				using (Timer timer = new Timer {AutoReset = false, Enabled = true, Interval = 1000}) {
+					timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
+				}
 
 				return "OK";
 			} catch (TaskCanceledException) {
@@ -440,7 +582,7 @@ namespace HSPI_IRobot {
 				WriteLog(ELogType.Debug, JsonConvert.SerializeObject(verifier?.ReportedState));
 				return "Robot verification timed out";
 			} catch (RobotConnectionException ex) {
-				RobotDiscovery.DiscoveredRobot robotMetadata = await new RobotDiscovery().GetRobotPublicDetails(ip);
+				DiscoveryClient.DiscoveredRobot robotMetadata = await new DiscoveryClient().GetRobotPublicDetails(ip);
 				if (robotMetadata == null) {
 					return "This IP address doesn't appear to belong to an iRobot product.";
 				}
@@ -468,7 +610,7 @@ namespace HSPI_IRobot {
 			}
 		}
 
-		private async void _createNewRobotDevice(string ip, string blid, string password, RobotVerifier verifier) {
+		private async void _createNewRobotDevice(string ip, string blid, string password, RobotVerifierClient verifier) {
 			PlugExtraData extraData = new PlugExtraData();
 			extraData.AddNamed("lastknownip", ip);
 			extraData.AddNamed("blid", blid);

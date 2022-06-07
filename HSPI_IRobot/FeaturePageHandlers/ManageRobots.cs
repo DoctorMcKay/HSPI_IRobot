@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Devices;
 using IRobotLANClient;
@@ -22,6 +24,12 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				case "getRobotFullStatus":
 					return _getRobotFullStatus((string) payload.SelectToken("blid"));
 				
+				case "rebootRobot":
+					return _rebootRobot((string) payload.SelectToken("blid"));
+				
+				case "getRobotSettings":
+					return _getRobotSettings((string) payload.SelectToken("blid"));
+				
 				case "cloudLogin":
 					return _cloudLogin((string) payload.SelectToken("username"), (string) payload.SelectToken("password"));
 				
@@ -37,7 +45,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 		}
 
 		private string _autodiscover() {
-			RobotDiscovery discovery = new RobotDiscovery();
+			DiscoveryClient discovery = new DiscoveryClient();
 			discovery.Discover();
 			discovery.OnRobotDiscovered += (sender, robot) => {
 				SetResult("autodiscover", new {discoveredRobots = discovery.DiscoveredRobots});
@@ -71,7 +79,8 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 					ip = robot.ConnectedIp,
 					type = robot.Type == RobotType.Vacuum ? "vacuum" : "mop",
 					name = robot.GetName(),
-					sku = robot.Robot?.Sku ?? "unknown"
+					sku = robot.Client?.Sku ?? "unknown",
+					softwareVersion = robot.Client?.SoftwareVersion ?? "unknown"
 				})
 			});
 		}
@@ -84,7 +93,46 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
 			return robot == null
 				? ErrorResponse("Invalid blid")
-				: JsonConvert.SerializeObject(new {status = robot.Robot?.ReportedState});
+				: JsonConvert.SerializeObject(new {status = robot.Client?.ReportedState});
+		}
+
+		private string _rebootRobot(string blid) {
+			if (blid == null) {
+				return BadCmdResponse;
+			}
+			
+			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
+			if (robot == null) {
+				return ErrorResponse("Invalid blid");
+			}
+
+			if (robot.Client == null || !robot.Client.Connected) {
+				return ErrorResponse("Not connected");
+			}
+			
+			robot.Client.Reboot();
+			return SuccessResponse;
+		}
+
+		private string _getRobotSettings(string blid) {
+			if (blid == null) {
+				return BadCmdResponse;
+			}
+			
+			HsRobot robot = HSPI.Instance.HsRobots.Find(r => r.Blid == blid);
+			if (robot == null) {
+				return ErrorResponse("Invalid blid");
+			}
+			
+			if (robot.Client == null || !robot.Client.Connected) {
+				return ErrorResponse("Not connected");
+			}
+
+			return JsonConvert.SerializeObject(new {
+				supportedOptions = robot.GetSupportedOptions()
+					.Select(option => Enum.GetName(typeof(ConfigOption), option))
+					.ToArray()
+			});
 		}
 
 		private string _cloudLogin(string username, string password) {

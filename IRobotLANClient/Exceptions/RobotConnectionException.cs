@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IRobotLANClient.Enums;
 
-namespace IRobotLANClient {
+namespace IRobotLANClient.Exceptions {
 	public class RobotConnectionException : Exception {
 		public readonly ConnectionError ConnectionError;
 

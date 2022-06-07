@@ -146,8 +146,8 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 
 			string[] usages = HSPI.Instance.GetHsController()
 				.GetActionsByInterface(HSPI.Instance.Id)
-				.Where(tai => tai.TANumber == StartFavoriteJobAction.ActionNumber)
-				.Select(tai => new StartFavoriteJobAction(tai.UID, tai.evRef, tai.DataIn, HSPI.Instance))
+				.Where(tai => tai.TANumber == RobotAction.ActionNumber)
+				.Select(tai => new RobotAction(tai.UID, tai.evRef, tai.DataIn, HSPI.Instance))
 				.Where(action => action.ReferencesFavoriteJob(blid, name))
 				.Select(action => action.GetEventGroupAndName())
 				.ToArray();
@@ -182,7 +182,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				robots = HSPI.Instance.HsRobots.Select(robot => new {
 					blid = robot.Blid,
 					name = robot.GetName(),
-					lastCommand = robot.Robot?.LastJobStartCommand
+					lastCommand = robot.Client?.LastJobStartCommand
 				})
 			});
 		}

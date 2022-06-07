@@ -7,10 +7,10 @@ using MQTTnet.Client.Receiving;
 
 namespace IRobotLANClient {
 	internal class MqttHandler : IMqttClientConnectedHandler, IMqttClientDisconnectedHandler, IMqttApplicationMessageReceivedHandler {
-		private readonly Robot _robot;
+		private readonly RobotClient _robot;
 		private readonly TaskCompletionSource<Exception> _exceptionSource;
 
-		internal MqttHandler(Robot robot) {
+		internal MqttHandler(RobotClient robot) {
 			_robot = robot;
 			_exceptionSource = new TaskCompletionSource<Exception>();
 
