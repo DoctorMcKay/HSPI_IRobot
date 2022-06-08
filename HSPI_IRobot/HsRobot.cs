@@ -39,8 +39,8 @@ namespace HSPI_IRobot {
 		
 		private readonly HSPI _plugin;
 		[JsonProperty] private readonly Dictionary<FeatureType, HsFeature> _features = new Dictionary<FeatureType, HsFeature>();
-		private Timer _reconnectTimer = null;
-		private Timer _stateUpdateDebounceTimer = null;
+		private OneShotTimer _reconnectTimer = null;
+		private OneShotTimer _stateUpdateDebounceTimer = null;
 		private DateTime _installingSoftwareUpdate = DateTime.MinValue;
 		
 		// These properties are used for correcting the robot's erroneous phase change from "charge" to "run" when ending a job
@@ -210,8 +210,7 @@ namespace HSPI_IRobot {
 
 		public async void Disconnect() {
 			_reconnectTimer?.Stop();
-			_reconnectTimer?.Dispose();
-			
+
 			if (Client != null) {
 				Client.OnDisconnected -= HandleDisconnect;
 				await Client.Disconnect();
@@ -220,16 +219,9 @@ namespace HSPI_IRobot {
 
 		private void EnqueueReconnectAttempt() {
 			_reconnectTimer?.Stop();
-			_reconnectTimer?.Dispose();
-			
-			_reconnectTimer = new Timer {
-				AutoReset = false,
-				Enabled = true,
-				Interval = 30000 // 30 seconds
-			};
 
+			_reconnectTimer = new OneShotTimer(30000); // 30 seconds
 			_reconnectTimer.Elapsed += async (src, arg) => {
-				_reconnectTimer.Dispose();
 				_reconnectTimer = null;
 
 				await AttemptConnect();
@@ -297,15 +289,9 @@ namespace HSPI_IRobot {
 			_lastObservedMissionPhase = Client.Phase;
 
 			_stateUpdateDebounceTimer?.Stop();
-			_stateUpdateDebounceTimer?.Dispose();
-			
-			_stateUpdateDebounceTimer = new Timer {
-				AutoReset = false,
-				Enabled = true,
-				Interval = debounceTimerInterval
-			};
+
+			_stateUpdateDebounceTimer = new OneShotTimer(debounceTimerInterval);
 			_stateUpdateDebounceTimer.Elapsed += (sender, args) => {
-				_stateUpdateDebounceTimer.Dispose();
 				_stateUpdateDebounceTimer = null;
 				OnRobotStatusUpdated?.Invoke(this, null);
 			};

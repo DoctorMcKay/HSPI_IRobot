@@ -103,42 +103,45 @@ namespace IRobotLANClient {
 				AutoReset = false,
 				Interval = 10000
 			};
+			
+			connectTimeout.Elapsed += (sender, args) => {
+				SignalCancellation();
+				// ReSharper disable once AccessToDisposedClosure
+				connectTimeout.Dispose();
+			};
 
-			using (connectTimeout) {
-				connectTimeout.Elapsed += (sender, args) => { SignalCancellation(); };
+			DateTime connectStartTime = DateTime.Now;
+			try {
+				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
+				connectTimeout.Stop();
+				connectTimeout.Dispose();
 
-				DateTime connectStartTime = DateTime.Now;
-				try {
-					MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
-					connectTimeout.Stop();
+				_connectedTime = DateTime.Now;
 
-					_connectedTime = DateTime.Now;
+				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
+				// but let's subscribe anyway just to be a good citizen
+				await MqttClient.SubscribeAsync(MqttStatusTopic);
+				ReportedState = new JObject(); // Reset reported state
 
-					// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
-					// but let's subscribe anyway just to be a good citizen
-					await MqttClient.SubscribeAsync(MqttStatusTopic);
-					ReportedState = new JObject(); // Reset reported state
-
-					return result;
-				} catch (OperationCanceledException) {
-					throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
-				} catch (Exception ex) {
-					for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
-						if (checkException.Message.Contains("BadUserNameOrPassword")) {
-							throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
-						}
-
-						if (checkException.Message.Contains("actively refused it")) {
-							throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
-						}
-
-						if (checkException.Message.Contains("timed out")) {
-							throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
-						}
+				return result;
+			} catch (OperationCanceledException) {
+				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
+			} catch (Exception ex) {
+				for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
+					if (checkException.Message.Contains("BadUserNameOrPassword")) {
+						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
 					}
 
-					throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
+					if (checkException.Message.Contains("actively refused it")) {
+						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
+					}
+
+					if (checkException.Message.Contains("timed out")) {
+						throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
+					}
 				}
+
+				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 			}
 		}
 

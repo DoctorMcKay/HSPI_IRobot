@@ -568,9 +568,8 @@ namespace HSPI_IRobot {
 					return "Unrecognized robot type";
 				}
 
-				using (Timer timer = new Timer {AutoReset = false, Enabled = true, Interval = 1000}) {
-					timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
-				}
+				OneShotTimer timer = new OneShotTimer(1000);
+				timer.Elapsed += (sender, args) => _createNewRobotDevice(ip, blid, password, verifier);
 
 				return "OK";
 			} catch (TaskCanceledException) {
