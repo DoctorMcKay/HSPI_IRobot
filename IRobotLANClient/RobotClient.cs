@@ -132,7 +132,7 @@ namespace IRobotLANClient {
 						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
 					}
 
-					if (checkException.Message.Contains("actively refused it")) {
+					if (checkException.Message.Contains("actively refused it") || checkException.Message.Contains("Connection refused")) {
 						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
 					}
 
