@@ -79,7 +79,7 @@ namespace HSPI_IRobot.HsEvents {
 			OnConfigItemUpdate(slv);
 			ConfigPage.UpdateViewById(slv);
 
-			if (!ConfigPage.ContainsViewWithId(OptionIdJobName)) {
+			if (!ConfigPage.ContainsViewWithId(OptionIdJobName) || !(ConfigPage.GetViewById(OptionIdJobName) is SelectListView)) {
 				return;
 			}
 			
