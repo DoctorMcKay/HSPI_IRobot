@@ -188,7 +188,7 @@ namespace HSPI_IRobot {
 		}
 
 		public bool DisableConnection(string source = null) {
-			if (State == HsRobotState.Disconnected && CannotConnectReason == HsRobotCannotConnectReason.ConnectionDisabled) {
+			if (State == HsRobotState.CannotConnect && CannotConnectReason == HsRobotCannotConnectReason.ConnectionDisabled) {
 				return false;
 			}
 
@@ -199,12 +199,12 @@ namespace HSPI_IRobot {
 			
 			WriteLog(ELogType.Info, "Disabling connection to robot");
 			Disconnect();
-			UpdateState(HsRobotState.Disconnected, HsRobotCannotConnectReason.ConnectionDisabled, statusString);
+			UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.ConnectionDisabled, statusString);
 			return true;
 		}
 
 		public bool EnableConnection() {
-			if (State != HsRobotState.Disconnected || CannotConnectReason != HsRobotCannotConnectReason.ConnectionDisabled) {
+			if (State != HsRobotState.CannotConnect || CannotConnectReason != HsRobotCannotConnectReason.ConnectionDisabled) {
 				return false;
 			}
 

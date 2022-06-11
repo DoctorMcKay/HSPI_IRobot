@@ -4,6 +4,6 @@
 		DisconnectedFromRobot = 10001,
 		CannotDiscoverRobot = 10002,
 		CannotConnectToMqtt = 10003,
-		UnexpectedRobotType = 10004
+		ConnectionDisabled = 10004
 	}
 }

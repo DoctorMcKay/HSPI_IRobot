@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace HSPI_IRobot.FeaturePageHandlers {
 	public class FavoriteJobs : AbstractFeaturePageHandler {
-		protected override string HandleCommand(string cmd, JObject payload) {
+		protected override string HandleCommand(string cmd, JObject payload, string user) {
 			switch (cmd) {
 				case "getFavoriteJobs":
 					return _getFavoriteJobs();

@@ -166,6 +166,17 @@ namespace HSPI_IRobot {
 
 					UpdateFeatureVersionNumber(feature.Ref, 2);
 					return 2;
+				
+				case 2:
+					_plugin.WriteLog(ELogType.Info, $"Updating feature {feature.Ref} (Error) to version 3");
+					_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+						"/images/HomeSeer/status/mute.png",
+						(double) InternalError.ConnectionDisabled,
+						"Connection disabled by user or event"
+					));
+
+					UpdateFeatureVersionNumber(feature.Ref, 3);
+					return 3;
 			}
 
 			// No applicable update

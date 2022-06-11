@@ -33,7 +33,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			return Handlers[page];
 		}
 
-		public string PostBackProc(string data) {
+		public string PostBackProc(string data, string user) {
 			JObject payload = JObject.Parse(data);
 			string cmd = (string) payload.SelectToken("cmd");
 			if (cmd == null) {
@@ -48,10 +48,10 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				_results.Remove(cmd);
 			}
 			
-			return HandleCommand(cmd, payload);
+			return HandleCommand(cmd, payload, user);
 		}
 
-		protected abstract string HandleCommand(string cmd, JObject payload);
+		protected abstract string HandleCommand(string cmd, JObject payload, string user);
 
 		protected string ErrorResponse(string error) {
 			return JsonConvert.SerializeObject(new {error});

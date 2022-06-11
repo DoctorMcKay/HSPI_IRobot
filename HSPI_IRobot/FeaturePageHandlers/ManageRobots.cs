@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace HSPI_IRobot.FeaturePageHandlers {
 	public class ManageRobots : AbstractFeaturePageHandler {
-		protected override string HandleCommand(string cmd, JObject payload) {
+		protected override string HandleCommand(string cmd, JObject payload, string user) {
 			switch (cmd) {
 				case "autodiscover":
 					return _autodiscover();
@@ -33,7 +33,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 						return BadCmdResponse;
 					}
 					
-					return _setRobotConnection((string) payload.SelectToken("blid"), (bool) connectionState);
+					return _setRobotConnection((string) payload.SelectToken("blid"), (bool) connectionState, user);
 				
 				case "getRobotSettings":
 					return _getRobotSettings((string) payload.SelectToken("blid"));
@@ -122,7 +122,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 			return SuccessResponse;
 		}
 
-		private string _setRobotConnection(string blid, bool connectionState) {
+		private string _setRobotConnection(string blid, bool connectionState, string user) {
 			if (blid == null) {
 				return BadCmdResponse;
 			}
@@ -132,7 +132,7 @@ namespace HSPI_IRobot.FeaturePageHandlers {
 				return ErrorResponse("Invalid blid");
 			}
 
-			bool result = connectionState ? robot.EnableConnection() : robot.DisableConnection("Manage Robots page");
+			bool result = connectionState ? robot.EnableConnection() : robot.DisableConnection(user);
 			return result ? SuccessResponse : BadCmdResponse;
 		}
 
