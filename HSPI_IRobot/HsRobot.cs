@@ -261,6 +261,11 @@ namespace HSPI_IRobot {
 		}
 
 		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
+			if (state == State && cannotConnectReason == CannotConnectReason && stateString == StateString) {
+				WriteLog(ELogType.Debug, $"Attempted to update connection state but it's already identical: {state} / {cannotConnectReason} / {stateString}");
+				return;
+			}
+			
 			WriteLog(
 				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
 				$"{Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
