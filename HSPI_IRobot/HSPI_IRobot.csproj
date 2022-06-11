@@ -58,6 +58,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="AnalyticsClient.cs" />
+        <Compile Include="HsEvents\RobotActions\ChangeConnectionState.cs" />
         <Compile Include="OneShotTimer.cs" />
         <Compile Include="Enums\CleanJobPhase.cs" />
         <Compile Include="Enums\FeatureType.cs" />

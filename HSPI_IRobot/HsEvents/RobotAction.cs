@@ -95,7 +95,8 @@ namespace HSPI_IRobot.HsEvents {
 			List<string> subActionNames = new List<string> {
 				"Start Favorite Job",
 				"Reboot Robot",
-				"Change Robot Setting"
+				"Change Robot Setting",
+				"Disconnect From or Re-Connect To Robot"
 			};
 
             PageFactory factory = PageFactory.CreateEventActionPage(PageId, Name);
@@ -179,6 +180,10 @@ namespace HSPI_IRobot.HsEvents {
 					_robotAction = new ChangeSetting(PageId, this);
 					break;
 				
+				case SubAction.ChangeConnectionState:
+					_robotAction = new ChangeConnectionState(PageId, this);
+					break;
+				
 				default:
 					_robotAction = null;
 					break;
@@ -236,7 +241,8 @@ namespace HSPI_IRobot.HsEvents {
 		private enum SubAction : int {
 			StartFavoriteJob = 0,
 			RebootRobot,
-			ChangeSetting
+			ChangeSetting,
+			ChangeConnectionState
 		}
 	}
 }
