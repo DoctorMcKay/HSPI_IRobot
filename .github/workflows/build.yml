@@ -37,8 +37,8 @@ jobs:
       run: |
         mkdir artifacts
         cp HSPI_IRobot\bin\Release\HSPI_IRobot.exe artifacts\HSPI_IRobot.exe
+        cp HSPI_IRobot\bin\Release\HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
         cp HSPI_IRobot\bin\Release\*.dll artifacts
-        cp HSPI_IRobot.exe.config artifacts\HSPI_IRobot.exe.config
         cp html\*.* artifacts
         cp install.txt artifacts\install.txt
         $release_version = (Get-ChildItem -Filter "artifacts\HSPI_IRobot.exe" | Select-Object -ExpandProperty VersionInfo).FileVersion.Replace('.', '-')
@@ -48,10 +48,10 @@ jobs:
     - name: Stage debug artifacts
       run: |
         mkdir artifacts-debug
-        cp HSPI_IRobot\bin\Debug\HSPI_IRobot.exe "artifacts-debug\HSPI_IRobot.exe"
+        cp HSPI_IRobot\bin\Debug\HSPI_IRobot.exe artifacts-debug\HSPI_IRobot.exe
+        cp HSPI_IRobot\bin\Debug\HSPI_IRobot.exe.config artifacts-debug\HSPI_IRobot.exe.config
         cp HSPI_IRobot\bin\Debug\*.dll artifacts-debug
         cp html\*.* artifacts-debug
-        cp HSPI_IRobot.exe.config artifacts-debug\HSPI_IRobot.exe.config
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
