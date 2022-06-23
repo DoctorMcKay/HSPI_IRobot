@@ -180,12 +180,13 @@ namespace HSPI_IRobot {
 			FeatureFactory factory = _getFactory()
 				.WithName("Error")
 				.WithAddress($"{_device.Address}:Error")
-				.WithExtraData(_versionExtraData(2))
+				.WithExtraData(_versionExtraData(3))
 				.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "No Error")
 				.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 1, 255)
 				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.DisconnectedFromRobot, "Disconnected from robot")
 				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotDiscoverRobot, "Robot not found on network")
-				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot");
+				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot")
+				.AddGraphicForValue("/images/HomeSeer/status/mute.png", (double) InternalError.ConnectionDisabled, "Connection disabled by user or event");
 			
 			// I considered adding an internal error code for "Rebooting" as it appears that sometimes the robot can reboot
 			// itself, but such status would only last for a few seconds before flipping to DisconnectedFromRobot so I

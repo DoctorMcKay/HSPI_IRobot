@@ -98,23 +98,10 @@ namespace IRobotLANClient {
 
 			_awaitingFirstReport = true;
 
-			Timer connectTimeout = new Timer {
-				Enabled = true,
-				AutoReset = false,
-				Interval = 10000
-			};
-			
-			connectTimeout.Elapsed += (sender, args) => {
-				SignalCancellation();
-				// ReSharper disable once AccessToDisposedClosure
-				connectTimeout.Dispose();
-			};
-
 			DateTime connectStartTime = DateTime.Now;
 			try {
 				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
-				connectTimeout.Stop();
-				connectTimeout.Dispose();
+				DebugOutput($"Connect result {result.ResultCode} for {Blid}");
 
 				_connectedTime = DateTime.Now;
 
@@ -132,7 +119,7 @@ namespace IRobotLANClient {
 						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
 					}
 
-					if (checkException.Message.Contains("actively refused it")) {
+					if (checkException.Message.Contains("actively refused it") || checkException.Message.Contains("Connection refused")) {
 						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
 					}
 

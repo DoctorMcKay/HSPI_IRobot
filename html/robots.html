@@ -17,7 +17,7 @@
 
 			.irobot-table-body .btn-link {
 				padding: 0;
-				margin: 0 5px 0 0;
+				margin: 0 10px 0 0;
 			}
 
 			.irobot-table-body .row:hover {
@@ -44,6 +44,18 @@
 				padding: 5px;
 				border-radius: 5px;
 			}
+			
+			@media (max-width: 575px) {
+				.robot-table-name {
+					font-weight: bold;
+				}
+			}
+			
+			@media (max-width: 767px) {
+				.container {
+					max-width: 100%;
+				}
+			}
 		</style>
 	</head>
 	<body class="body homeseer-skin">
@@ -57,9 +69,9 @@
 			
 			<div class="row no-gutters mt-2 grey lighten-3 irobot-table-header d-none d-sm-flex">
 				<div class="col-3">Name</div>
-				<div class="col-3 col-md-2">Address</div>
-				<div class="col-3 col-md-4">Status</div>
-				<div class="col-3">Actions</div>
+				<div class="col-2 d-none d-lg-block">Address</div>
+				<div class="col-4 col-md-5 col-lg-4">Status</div>
+				<div class="col-5 col-md-4 col-lg-3">Actions</div>
 			</div>
 			
 			<div id="robots-table-body" class="irobot-table-body"></div>
@@ -285,19 +297,25 @@
 					
 						let $row = $('<div class="row no-gutters" />');
 						
-						let $col = $('<div class="col-sm-3" />');
+						// Column layout at various screen sizes:
+						// xs: stacked
+						// sm: 3/0/4/5
+						// md: 3/0/5/4
+						// lg: 3/2/4/3
+						
+						let $col = $('<div class="col-sm-3 robot-table-name" />');
 						$col.text(robot.name);
 						$row.append($col);
 						
-						$col = $('<div class="col-sm-3 col-md-2" />');
+						$col = $('<div class="col-sm-2 d-none d-lg-block" />');
 						$col.text(robot.ip);
 						$row.append($col);
 						
-						$col = $('<div class="col-sm-3 col-md-4" />');
+						$col = $('<div class="col-sm-4 col-md-5 col-lg-4" />');
 						$col.text(robot.stateString);
 						$row.append($col);
 						
-						$col = $('<div class="col-sm-3" />');
+						$col = $('<div class="col-sm-5 col-md-4 col-lg-3" />');
 						// Info
 						let $btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(async () => {
@@ -323,10 +341,27 @@
 						$btn = $('<button type="button" class="btn btn-link" />');
 						$btn.click(async function() {
 							await ajaxCmd('rebootRobot', {blid: robot.blid});
-							$(this).prop('disabled', true).text('Rebooting');
+							
+							let $this = $(this);
+							$this.prop('disabled', true).text('Rebooting');
+							$this.parent().html($this);
 						});
 						$btn.prop('disabled', robot.stateString != 'OK');
 						$btn.text('Reboot');
+						$col.append($btn);
+						
+						// Enable or disable
+						let robotCurrentlyEnabled = !robot.stateString.startsWith('Connection disabled');
+						$btn = $('<button type="button" class="btn btn-link" />');
+						$btn.click(async function() {
+							// We don't need to retrieve a new current state because the entire table is re-drawn when anything changes
+							let $this = $(this);
+							$this.prop('disabled', true).text($this.text().replace(/e$/, 'ing'));
+							$this.parent().html($this);
+							
+							await ajaxCmd('setRobotConnection', {blid: robot.blid, connection_state: !robotCurrentlyEnabled});
+						});
+						$btn.text(robotCurrentlyEnabled ? 'Disable' : 'Enable');
 						$col.append($btn);
 						
 						// Delete
@@ -370,7 +405,7 @@
 						
 						let $row = $('<div class="row no-gutters" />');
 						
-						let $col = $('<div class="col-sm-3" />');
+						let $col = $('<div class="col-sm-3 robot-table-name" />');
 						$col.text(robot.RobotName);
 						$row.append($col);
 						
@@ -463,7 +498,7 @@
 							
 							let $row = $('<div class="row no-gutters" />');
 							
-							let $col = $('<div class="col-sm-3" />');
+							let $col = $('<div class="col-sm-3 robot-table-name" />');
 							$col.text(robot.Name);
 							$row.append($col);
 							

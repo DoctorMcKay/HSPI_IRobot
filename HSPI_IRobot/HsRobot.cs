@@ -13,7 +13,6 @@ using IRobotLANClient.Enums;
 using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HsRobot {
@@ -94,6 +93,11 @@ namespace HSPI_IRobot {
 			
 			if (State == HsRobotState.Connecting && !skipStateCheck) {
 				WriteLog(ELogType.Warning, "Aborting AttemptConnect because our state is already Connecting");
+				return;
+			}
+
+			if (CannotConnectReason == HsRobotCannotConnectReason.ConnectionDisabled) {
+				WriteLog(ELogType.Warning, "Aborting AttemptConnect because our connection is disabled");
 				return;
 			}
 			
@@ -183,6 +187,33 @@ namespace HSPI_IRobot {
 			Client.OnUnexpectedValue += HandleUnexpectedValue;
 		}
 
+		public bool DisableConnection(string source = null) {
+			if (State == HsRobotState.CannotConnect && CannotConnectReason == HsRobotCannotConnectReason.ConnectionDisabled) {
+				return false;
+			}
+
+			string statusString = "Connection disabled";
+			if (source != null) {
+				statusString = $"Connection disabled by {source}";
+			}
+			
+			WriteLog(ELogType.Info, "Disabling connection to robot");
+			Disconnect();
+			UpdateState(HsRobotState.CannotConnect, HsRobotCannotConnectReason.ConnectionDisabled, statusString);
+			return true;
+		}
+
+		public bool EnableConnection() {
+			if (State != HsRobotState.CannotConnect || CannotConnectReason != HsRobotCannotConnectReason.ConnectionDisabled) {
+				return false;
+			}
+
+			WriteLog(ELogType.Info, "Attempting to re-establish connection to previously disabled robot");
+			UpdateState(HsRobotState.Connecting, HsRobotCannotConnectReason.Ok, "Connecting");
+			AttemptConnect(null, true).ContinueWith(_ => { });
+			return true;
+		}
+
 		private async Task<string> FindRobot() {
 			DiscoveryClient discovery = new DiscoveryClient();
 			discovery.Discover();
@@ -214,6 +245,7 @@ namespace HSPI_IRobot {
 			if (Client != null) {
 				Client.OnDisconnected -= HandleDisconnect;
 				await Client.Disconnect();
+				Client = null;
 			}
 		}
 
@@ -229,6 +261,11 @@ namespace HSPI_IRobot {
 		}
 
 		private void UpdateState(HsRobotState state, HsRobotCannotConnectReason cannotConnectReason, string stateString) {
+			if (state == State && cannotConnectReason == CannotConnectReason && stateString == StateString) {
+				WriteLog(ELogType.Debug, $"Attempted to update connection state but it's already identical: {state} / {cannotConnectReason} / {stateString}");
+				return;
+			}
+			
 			WriteLog(
 				state == HsRobotState.Connecting || state == HsRobotState.Connected ? ELogType.Info : ELogType.Warning,
 				$"{Blid} connection state update: {state} / {cannotConnectReason} / {stateString}"
@@ -444,7 +481,8 @@ namespace HSPI_IRobot {
 			Ok,
 			CannotDiscover,
 			DiscoveredCannotConnect,
-			CannotValidateType
+			CannotValidateType,
+			ConnectionDisabled
 		}
 	}
 }

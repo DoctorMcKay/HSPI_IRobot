@@ -44,8 +44,8 @@
         <Reference Include="MQTTnet, Version=3.1.2.0, Culture=neutral, PublicKeyToken=b69712f52770c0a7, processorArchitecture=MSIL">
           <HintPath>..\packages\MQTTnet.3.1.2\lib\net461\MQTTnet.dll</HintPath>
         </Reference>
-        <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-          <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+        <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+          <HintPath>..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
         </Reference>
         <Reference Include="PluginSdk, Version=1.4.0.0, Culture=neutral, processorArchitecture=MSIL">
           <HintPath>..\packages\HomeSeer-PluginSDK.1.4.0\lib\net462\PluginSdk.dll</HintPath>
@@ -58,6 +58,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="AnalyticsClient.cs" />
+        <Compile Include="HsEvents\RobotActions\ChangeConnectionState.cs" />
         <Compile Include="OneShotTimer.cs" />
         <Compile Include="Enums\CleanJobPhase.cs" />
         <Compile Include="Enums\FeatureType.cs" />
@@ -82,6 +83,7 @@
         <Compile Include="RobotOptions.cs" />
     </ItemGroup>
     <ItemGroup>
+      <None Include="App.config" />
       <None Include="packages.config" />
     </ItemGroup>
     <ItemGroup>

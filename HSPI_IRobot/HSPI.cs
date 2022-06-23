@@ -175,36 +175,58 @@ namespace HSPI_IRobot {
 		private void HandleRobotConnectionStateUpdate(object src, EventArgs arg) {
 			HsRobot robot = (HsRobot) src;
 			HsFeature errorFeature = robot.GetFeature(FeatureType.Error);
+			
+			InternalError newInternalError;
+			string newErrorString = "";
 
 			switch (robot.State) {
 				case HsRobot.HsRobotState.Connected:
-					HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.None);
+					newInternalError = InternalError.None;
 					break;
 				
 				case HsRobot.HsRobotState.Disconnected:
-					HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.DisconnectedFromRobot);
+					newInternalError = InternalError.DisconnectedFromRobot;
 					break;
 				
 				case HsRobot.HsRobotState.CannotConnect:
 					switch (robot.CannotConnectReason) {
 						case HsRobot.HsRobotCannotConnectReason.CannotDiscover:
-							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.CannotDiscoverRobot);
+							newInternalError = InternalError.CannotDiscoverRobot;
 							break;
 						
 						case HsRobot.HsRobotCannotConnectReason.DiscoveredCannotConnect:
 						case HsRobot.HsRobotCannotConnectReason.CannotValidateType:
-							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.CannotConnectToMqtt);
+							newInternalError = InternalError.CannotConnectToMqtt;
+							break;
+						
+						case HsRobot.HsRobotCannotConnectReason.ConnectionDisabled:
+							newInternalError = InternalError.ConnectionDisabled;
+							if (robot.StateString != "Connection disabled") {
+								newErrorString = robot.StateString;
+							}
+
 							break;
 						
 						default:
-							HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) InternalError.DisconnectedFromRobot);
+							newInternalError = InternalError.DisconnectedFromRobot;
 							break;
 					}
 
 					break;
 				
-				// We purposefully don't have a default case because we don't want to update the error feature value when reconnecting
+				case HsRobot.HsRobotState.FatalError:
+					newInternalError = InternalError.DisconnectedFromRobot;
+					newErrorString = "Fatal Error";
+					break;
+				
+				case HsRobot.HsRobotState.Connecting:
+				default:
+					// We don't want to update anything when we're reconnecting
+					return;
 			}
+
+			HomeSeerSystem.UpdateFeatureValueByRef(errorFeature.Ref, (double) newInternalError);
+			HomeSeerSystem.UpdateFeatureValueStringByRef(errorFeature.Ref, newErrorString);
 		}
 
 		private void HandleRobotStatusUpdate(object src, EventArgs arg) {
@@ -538,7 +560,7 @@ namespace HSPI_IRobot {
 
 			try {
 				AbstractFeaturePageHandler handler = AbstractFeaturePageHandler.GetHandler(page);
-				return handler.PostBackProc(data);
+				return handler.PostBackProc(data, user);
 			} catch (Exception ex) {
 				WriteLog(ELogType.Warning, $"PostBackProc error for page {page}: {ex.Message}");
 				return ex.Message;
