@@ -5,6 +5,7 @@
 		BinFullPause,
 		CleaningPassMode,
 		WetMopPadWetness,
-		WetMopPassOverlap
+		WetMopPassOverlap,
+		EvacAllowed
 	}
 }

@@ -26,8 +26,8 @@ namespace IRobotLANClient {
 			} else {
 				BinStatus = binFull ? BinStatus.Full : BinStatus.Ok;
 			}
-
-			EvacAllowed = state.EvacAllowed;
+			
+			EvacAllowed = state.EvacAllowed ?? false;
 			BinFullPause = state.BinPause;
 
 			if (state.TwoPass) {
@@ -46,6 +46,9 @@ namespace IRobotLANClient {
 					
 				case ConfigOption.BinFullPause:
 					return (int) (ReportedState.SelectToken("cap.binFullDetect") ?? JToken.FromObject(0)) == 2;
+				
+				case ConfigOption.EvacAllowed:
+					return ReportedState.SelectToken("evacAllowed") != null;
 					
 				default:
 					return base.SupportsConfigOption(option);
@@ -76,6 +79,10 @@ namespace IRobotLANClient {
 			}
 			
 			UpdateOption(new {twoPass, noAutoPasses});
+		}
+
+		public void SetEvacAllowed(bool evacAllowed) {
+			UpdateOption(new {evacAllowed});
 		}
 
 		public void Evac() {

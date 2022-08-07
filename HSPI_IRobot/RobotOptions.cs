@@ -25,6 +25,9 @@ namespace HSPI_IRobot {
 				case ConfigOption.WetMopPassOverlap:
 					return "Wet mopping behavior";
 				
+				case ConfigOption.EvacAllowed:
+					return "Clean base auto-empty";
+				
 				default:
 					throw new InvalidEnumArgumentException($"Unsupported option {option}");
 			}
@@ -70,6 +73,12 @@ namespace HSPI_IRobot {
 						"67",
 						"85",
 						"25"
+					};
+				
+				case ConfigOption.EvacAllowed:
+					return new List<string> {
+						"1",
+						"0"
 					};
 				
 				default:
@@ -119,6 +128,12 @@ namespace HSPI_IRobot {
 						"Extended coverage"
 					};
 				
+				case ConfigOption.EvacAllowed:
+					return new List<string> {
+						"Auto-empty enabled",
+						"Auto-empty disabled"
+					};
+				
 				default:
 					throw new InvalidEnumArgumentException($"Unsupported option {option}");
 			}
@@ -148,6 +163,10 @@ namespace HSPI_IRobot {
 				
 				case ConfigOption.WetMopPassOverlap:
 					((RobotMopClient) robot.Client).SetWetMopRankOverlap((byte) settingValue);
+					return true;
+				
+				case ConfigOption.EvacAllowed:
+					((RobotVacuumClient) robot.Client).SetEvacAllowed(settingValue != 0);
 					return true;
 				
 				default:

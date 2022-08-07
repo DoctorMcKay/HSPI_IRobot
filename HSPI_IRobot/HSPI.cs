@@ -475,6 +475,10 @@ namespace HSPI_IRobot {
 							currentSetting = ((RobotMopClient) robot.Client).WetMopRankOverlap.ToString();
 							break;
 						
+						case ConfigOption.EvacAllowed:
+							currentSetting = ((RobotVacuumClient) robot.Client).EvacAllowed ? "1" : "0";
+							break;
+						
 						default:
 							continue;
 					}
@@ -667,9 +671,13 @@ namespace HSPI_IRobot {
 			featureCreator.CreateFeature(FeatureType.Error);
 
 			if (verifier.DetectedType == RobotType.Vacuum) {
-				// Not all vacuums can self-empty their bins, but definitely no mops can so this is good enough
-				// There isn't a good way to definitively tell if a robot supports self-empty unless it's presently
-				// on a self-empty dock.
+				// Not all vacuums can self-empty their bins, but definitely no mops can so this is good enough.
+				// The presence of evacAllowed in the robot's status data likely indicates whether it can self-empty,
+				// but I'm not 100% sure of what happens if an i/j/s series robot is initially set up without a clean base
+				// and one is added later. If evacAllowed is always present for those models, then it would be a good
+				// way to determine if an Empty Bin status control is useful, but if it only appears once a clean base
+				// is in the picture, then we'd need to account for adding the control later. For now, let's just go ahead
+				// and put the control on all vacuums.
 				HomeSeerSystem.AddStatusControlToFeature(
 					HomeSeerSystem.GetFeatureByAddress($"{blid}:Status").Ref,
 					new StatusControl(EControlType.Button) { Label = "Empty Bin", TargetValue = (double) RobotStatus.Evac }
