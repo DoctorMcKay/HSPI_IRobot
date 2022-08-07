@@ -97,6 +97,21 @@ namespace IRobotLANClient {
 			#endif
 
 			_awaitingFirstReport = true;
+			
+			// Sometimes it appears that the connect attempt can just hang, and I'm not sure if there's some way to fix it
+			// within the MQTT library. But using our own timeout should work, at least.
+			Timer connectTimeout = new Timer {
+				Interval = 10000,
+				Enabled = true,
+				AutoReset = false
+			};
+
+			connectTimeout.Elapsed += (src, arg) => {
+				DebugOutput($"Internal connection timeout elapsed for {Blid}");
+				SignalCancellation();
+				// ReSharper disable once AccessToDisposedClosure
+				connectTimeout.Dispose();
+			};
 
 			DateTime connectStartTime = DateTime.Now;
 			try {
@@ -109,11 +124,18 @@ namespace IRobotLANClient {
 				// but let's subscribe anyway just to be a good citizen
 				await MqttClient.SubscribeAsync(MqttStatusTopic);
 				ReportedState = new JObject(); // Reset reported state
+				
+				// Connection succeeded
+				connectTimeout.Stop();
+				connectTimeout.Dispose();
 
 				return result;
 			} catch (OperationCanceledException) {
 				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
 			} catch (Exception ex) {
+				connectTimeout.Stop();
+				connectTimeout.Dispose();
+				
 				for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
 					if (checkException.Message.Contains("BadUserNameOrPassword")) {
 						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
