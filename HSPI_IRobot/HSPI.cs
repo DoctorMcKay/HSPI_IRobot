@@ -475,6 +475,10 @@ namespace HSPI_IRobot {
 							currentSetting = ((RobotMopClient) robot.Client).WetMopRankOverlap.ToString();
 							break;
 						
+						case ConfigOption.EvacAllowed:
+							currentSetting = ((RobotVacuumClient) robot.Client).EvacAllowed ? "1" : "0";
+							break;
+						
 						default:
 							continue;
 					}
