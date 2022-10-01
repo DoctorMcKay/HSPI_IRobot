@@ -14,14 +14,26 @@ namespace IRobotLANClient {
 		public RobotMopClient(string address, string blid, string password) : base(address, blid, password) { }
 
 		public override bool IsCorrectRobotType() {
-			return ReportedState.ContainsKey("mopReady");
+			return ReportedState.ContainsKey("padWetness");
 		}
 
 		protected override void HandleRobotStateUpdate() {
 			ReportedStateMop state = JsonConvert.DeserializeObject<ReportedStateMop>(ReportedState.ToString());
+			if (state == null) {
+				return;
+			}
 
-			bool tankPresent = state.MopReady?.TankPresent ?? false;
-			bool lidClosed = state.MopReady?.LidClosed ?? false;
+			// Robot software version c, 22.29.3 moved these values to the top level status object. Let's support both
+			// software versions.
+			bool tankPresent, lidClosed;
+
+			if (state.MopReady != null) {
+				tankPresent = state.MopReady.TankPresent;
+				lidClosed = state.MopReady.LidClosed;
+			} else {
+				tankPresent = state.TankPresent;
+				lidClosed = !state.LidOpen;
+			}
 
 			// In my experience, tankPresent = false always when tankLevel = 0, so we can probably use either one to
 			// determine if it needs filling

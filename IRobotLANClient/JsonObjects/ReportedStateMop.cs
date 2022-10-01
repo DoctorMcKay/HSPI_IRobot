@@ -3,7 +3,10 @@
 namespace IRobotLANClient.JsonObjects {
 	[JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
 	public class ReportedStateMop {
+		// mopReady ceases to exist in software version c. 22.29.3
 		[JsonProperty("mopReady")] public MopReadyType MopReady;
+		[JsonProperty("lidOpen")] public bool LidOpen;
+		[JsonProperty("tankPresent")] public bool TankPresent;
 		[JsonProperty("tankLvl")] public int TankLvl;
 		[JsonProperty("detectedPad")] public string DetectedPad;
 		[JsonProperty("padWetness")] public PadWetnessType PadWetness;
