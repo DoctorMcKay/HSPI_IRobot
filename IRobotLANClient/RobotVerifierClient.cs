@@ -21,7 +21,7 @@ namespace IRobotLANClient {
 				DetectedType = RobotType.Vacuum;
 			}
 
-			if (ReportedState.ContainsKey("mopReady")) {
+			if (ReportedState.ContainsKey("mopReady") || ReportedState.ContainsKey("tankPresent")) {
 				DetectedType = RobotType.Mop;
 			}
 
