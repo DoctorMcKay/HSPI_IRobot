@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Devices.Identification;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.Resources;
 
 namespace HSPI_IRobot {
 	public class FeatureUpdater {
@@ -177,6 +180,35 @@ namespace HSPI_IRobot {
 
 					UpdateFeatureVersionNumber(feature.Ref, 3);
 					return 3;
+				
+				case 3:
+					_plugin.WriteLog(ELogType.Info, $"Updating feature {feature.Ref} (Error) to version 4");
+
+					_plugin.GetHsController().DeleteStatusGraphicByValue(feature.Ref, 1);
+					
+					OrderedDictionary errorCodes = RobotErrorCodes.GetErrorCodesVersion4();
+					foreach (DictionaryEntry entry in errorCodes) {
+						int errorCode = (int) entry.Key;
+						string message = (string) entry.Value;
+
+						if (message.StartsWith("RANGE ")) {
+							int endRange = int.Parse(message.Substring(6));
+							_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+								"/images/HomeSeer/status/alarm.png",
+								new ValueRange(errorCode, endRange) {Prefix = "Error "}
+							));
+							continue;
+						}
+						
+						_plugin.GetHsController().AddStatusGraphicToFeature(feature.Ref, new StatusGraphic(
+							"/images/HomeSeer/status/alarm.png",
+							errorCode,
+							message
+						));
+					}
+					
+					UpdateFeatureVersionNumber(feature.Ref, 4);
+					return 4;
 			}
 
 			// No applicable update

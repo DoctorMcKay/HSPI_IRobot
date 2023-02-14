@@ -77,6 +77,7 @@
         <Compile Include="HsEvents\RobotTrigger.cs" />
         <Compile Include="HSPI.cs" />
         <Compile Include="HsRobot.cs" />
+        <Compile Include="Resources\RobotErrorCodes.cs" />
         <Compile Include="RobotCloudAuth.cs" />
         <Compile Include="Program.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />

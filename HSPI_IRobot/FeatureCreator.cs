@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Specialized;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Devices.Identification;
 using HomeSeer.PluginSdk.Logging;
 using HSPI_IRobot.Enums;
+using HSPI_IRobot.Resources;
 using IRobotLANClient.Enums;
 
 namespace HSPI_IRobot {
@@ -180,14 +183,35 @@ namespace HSPI_IRobot {
 			FeatureFactory factory = _getFactory()
 				.WithName("Error")
 				.WithAddress($"{_device.Address}:Error")
-				.WithExtraData(_versionExtraData(3))
-				.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "No Error")
-				.AddGraphicForRange("/images/HomeSeer/status/alarm.png", 1, 255)
-				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.DisconnectedFromRobot, "Disconnected from robot")
+				.WithExtraData(_versionExtraData(4))
+				.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "No Error");
+
+			OrderedDictionary errorCodes = RobotErrorCodes.GetErrorCodesVersion4();
+			foreach (DictionaryEntry entry in errorCodes) {
+				int errorCode = (int) entry.Key;
+				string message = (string) entry.Value;
+
+				if (message.StartsWith("RANGE ")) {
+					int endRange = int.Parse(message.Substring(6));
+					factory.AddGraphic(new StatusGraphic(
+						"/images/HomeSeer/status/alarm.png",
+						new ValueRange(errorCode, endRange) {Prefix = "Error "}
+					) {Value = errorCode});
+					continue;
+				}
+						
+				factory.AddGraphicForValue(
+					"/images/HomeSeer/status/alarm.png",
+					errorCode,
+					message
+				);
+			}
+			
+			factory.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.DisconnectedFromRobot, "Disconnected from robot")
 				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotDiscoverRobot, "Robot not found on network")
 				.AddGraphicForValue("/images/HomeSeer/status/alarm.png", (double) InternalError.CannotConnectToMqtt, "Cannot connect to robot")
 				.AddGraphicForValue("/images/HomeSeer/status/mute.png", (double) InternalError.ConnectionDisabled, "Connection disabled by user or event");
-			
+
 			// I considered adding an internal error code for "Rebooting" as it appears that sometimes the robot can reboot
 			// itself, but such status would only last for a few seconds before flipping to DisconnectedFromRobot so I
 			// ultimately decided against it. This is how an internal reboot manifests itself:
