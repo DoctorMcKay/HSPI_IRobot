@@ -20,7 +20,6 @@ using IRobotLANClient.Enums;
 using IRobotLANClient.Exceptions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Timer = System.Timers.Timer;
 
 namespace HSPI_IRobot {
 	public class HSPI : AbstractPlugin {
