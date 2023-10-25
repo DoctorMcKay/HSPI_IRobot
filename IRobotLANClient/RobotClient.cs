@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Security.Authentication;
 using System.Text;
 using System.Threading;
@@ -8,8 +9,6 @@ using IRobotLANClient.Exceptions;
 using IRobotLANClient.JsonObjects;
 using MQTTnet.Client;
 using MQTTnet;
-using MQTTnet.Client.Connecting;
-using MQTTnet.Client.Options;
 using MQTTnet.Formatter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -51,6 +50,8 @@ namespace IRobotLANClient {
 		private bool _awaitingFirstReportTimer;
 		private DateTime _connectedTime;
 
+		private readonly TaskCompletionSource<Exception> _exceptionSource;
+
 		#if DEBUG
 		private static bool SpoofingSoftwareUpdate;
 		#endif
@@ -60,33 +61,35 @@ namespace IRobotLANClient {
 			Address = address;
 			Blid = blid;
 			Password = password;
+
+			_exceptionSource = new TaskCompletionSource<Exception>();
+			_exceptionSource.Task.ContinueWith(task => throw task.Result);
 		}
 
 		public async Task<MqttClientConnectResult> Connect() {
 			MqttFactory factory = new MqttFactory();
 			MqttClient = factory.CreateMqttClient();
 
-			MqttClientOptionsBuilderTlsParameters tlsParams = new MqttClientOptionsBuilderTlsParameters {
-				AllowUntrustedCertificates = true,
-				CertificateValidationHandler = _ => true,
-				SslProtocol = SslProtocols.Tls12,
-				UseTls = true
-			};
+			MqttClientTlsOptions tlsOptions = new MqttClientTlsOptionsBuilder()
+				.WithAllowUntrustedCertificates(true)
+				.WithCertificateValidationHandler(_ => true)
+				.WithSslProtocols(SslProtocols.Tls12)
+				.UseTls(true)
+				.Build();
 
-			IMqttClientOptions clientOptions = new MqttClientOptionsBuilder()
+			MqttClientOptions clientOptions = new MqttClientOptionsBuilder()
 				.WithTcpServer(Address, 8883)
 				.WithCredentials(Blid, Password)
 				.WithClientId(Blid)
-				.WithTls(tlsParams)
+				.WithTlsOptions(tlsOptions)
 				.WithProtocolVersion(MqttProtocolVersion.V311)
 				.WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
-				.WithCommunicationTimeout(TimeSpan.FromSeconds(5))
+				.WithTimeout(TimeSpan.FromSeconds(5))
 				.Build();
-
-			MqttHandler handler = new MqttHandler(this);
-			MqttClient.ApplicationMessageReceivedHandler = handler;
-			MqttClient.ConnectedHandler = handler;
-			MqttClient.DisconnectedHandler = handler;
+			
+			MqttClient.ConnectedAsync += OnConnectedAsync;
+			MqttClient.DisconnectedAsync += OnDisconnectedAsync;
+			MqttClient.ApplicationMessageReceivedAsync += OnApplicationMessageReceived;
 
 			#if DEBUG
 			if (SpoofingSoftwareUpdate) {
@@ -152,6 +155,41 @@ namespace IRobotLANClient {
 
 				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 			}
+		}
+
+		private Task OnConnectedAsync(MqttClientConnectedEventArgs args) {
+			// This is going to look ridiculous, but that's only because it is. MQTTnet swallows exceptions thrown in
+			// event handlers, because apparently continuing with undefined behavior if an exception isn't handled is
+			// preferable to crashing the app. So we have to escape this context to re-throw unhandled exceptions.
+			
+			// This was true in v3, unsure if this is still true in v4.
+			try {
+				ConnectedStateChanged(true);
+			} catch (Exception ex) {
+				_exceptionSource.SetResult(ex);
+			}
+			
+			return Task.CompletedTask;
+		}
+		
+		private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs eventArgs) {
+			try {
+				ConnectedStateChanged(false);
+			} catch (Exception ex) {
+				_exceptionSource.SetResult(ex);
+			}
+
+			return Task.CompletedTask;
+		}
+
+		private Task OnApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs args) {
+			try {
+				ApplicationMessageReceived(args.ApplicationMessage);
+			} catch (Exception ex) {
+				_exceptionSource.SetResult(ex);
+			}
+
+			return Task.CompletedTask;
 		}
 
 		public async Task Disconnect() {
@@ -223,10 +261,10 @@ namespace IRobotLANClient {
 			cmd["time"] = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds;
 			cmd["initiator"] = "localApp";
 
-			MqttApplicationMessage msg = new MqttApplicationMessage {
-				Topic = "cmd",
-				Payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(cmd))
-			};
+			MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
+				.WithTopic("cmd")
+				.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(cmd)))
+				.Build();
 
 			try {
 				await MqttClient.PublishAsync(msg, _cancellationTokenSource.Token);
@@ -282,10 +320,10 @@ namespace IRobotLANClient {
 		#endif
 
 		protected void UpdateOption(object request) {
-			MqttApplicationMessage msg = new MqttApplicationMessage {
-				Topic = "delta",
-				Payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new {state = request}))
-			};
+			MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
+				.WithTopic("delta")
+				.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new {state = request})))
+				.Build();
 
 			try {
 				MqttClient.PublishAsync(msg, _cancellationTokenSource.Token).Wait();
@@ -295,7 +333,7 @@ namespace IRobotLANClient {
 		}
 
 		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
-			string jsonPayload = Encoding.UTF8.GetString(msg.Payload);
+			string jsonPayload = Encoding.UTF8.GetString(msg.PayloadSegment.ToArray());
 			JObject payload = JObject.Parse(jsonPayload);
 
 			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
