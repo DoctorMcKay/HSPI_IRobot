@@ -60,7 +60,8 @@ namespace HSPI_IRobot {
 					using (HttpClient client = new HttpClient()) {
 						StringContent content = new StringContent(JsonConvert.SerializeObject(new {
 							AnalyticsData = _gatherData(),
-							Exception = exception
+							Exception = exception,
+							Log = _log.ToArray()
 						}), Encoding.UTF8, "application/json");
 
 						using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ErrorReportUrl) {Content = content}) {
