@@ -15,17 +15,17 @@ using Newtonsoft.Json;
 
 namespace HSPI_IRobot {
 	public class AnalyticsClient {
-		private const string ReportUrl = "https://hsstats.doctormckay.com/report.php";
-		private const string ErrorReportUrl = "https://hsstats.doctormckay.com/error.php";
-		private const string DebugReportUrl = "https://hsstats.doctormckay.com/debug_report.php";
-		private const string GlobalIniFilename = "DrMcKayGlobal.ini";
+		private const string REPORT_URL = "https://hsstats.doctormckay.com/report.php";
+		private const string ERROR_REPORT_URL = "https://hsstats.doctormckay.com/error.php";
+		private const string DEBUG_REPORT_URL = "https://hsstats.doctormckay.com/debug_report.php";
+		private const string GLOBAL_INI_FILENAME = "DrMcKayGlobal.ini";
 
 		public string CustomSystemId {
 			get {
-				string customSystemId = _hs.GetINISetting("System", "ID", "", GlobalIniFilename);
+				string customSystemId = _hs.GetINISetting("System", "ID", "", GLOBAL_INI_FILENAME);
 				if (customSystemId.Length == 0) {
 					customSystemId = Guid.NewGuid().ToString();
-					_hs.SaveINISetting("System", "ID", customSystemId, GlobalIniFilename);
+					_hs.SaveINISetting("System", "ID", customSystemId, GLOBAL_INI_FILENAME);
 				}
 
 				return customSystemId;
@@ -64,7 +64,7 @@ namespace HSPI_IRobot {
 							Log = _log.ToArray()
 						}), Encoding.UTF8, "application/json");
 
-						using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ErrorReportUrl) {Content = content}) {
+						using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ERROR_REPORT_URL) {Content = content}) {
 							(await client.SendAsync(req)).Dispose();
 						}
 					}
@@ -87,7 +87,7 @@ namespace HSPI_IRobot {
 				using (HttpClient client = new HttpClient()) {
 					StringContent content = new StringContent(JsonConvert.SerializeObject(_gatherData()), Encoding.UTF8, "application/json");
 					
-					using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, ReportUrl) {Content = content}) {
+					using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, REPORT_URL) {Content = content}) {
 						using (HttpResponseMessage res = await client.SendAsync(req)) {
 							_plugin.WriteLog(ELogType.Trace, $"Analytics report: {res.StatusCode}");
 						}
@@ -133,7 +133,7 @@ namespace HSPI_IRobot {
 						DebugReport = report
 					});
 
-					using (HttpResponseMessage res = await client.PostAsync(DebugReportUrl, new StringContent(jsonReport, Encoding.UTF8, "application/json"))) {
+					using (HttpResponseMessage res = await client.PostAsync(DEBUG_REPORT_URL, new StringContent(jsonReport, Encoding.UTF8, "application/json"))) {
 						return new DebugReportResponse(res.IsSuccessStatusCode, await res.Content.ReadAsStringAsync());
 					}
 				}
