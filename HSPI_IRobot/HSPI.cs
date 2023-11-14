@@ -244,13 +244,14 @@ namespace HSPI_IRobot {
 				
 				case MissionCycle.Clean:
 				case MissionCycle.Spot:
+				case MissionCycle.Train:
 					switch (robot.Client.Phase) {
 						case MissionPhase.Stop:
 							status = RobotStatus.JobPaused;
 							break;
 
 						default:
-							status = RobotStatus.Clean;
+							status = robot.Client.Cycle == MissionCycle.Train ? RobotStatus.Train : RobotStatus.Clean;
 							break;
 					}
 					break;
@@ -261,10 +262,6 @@ namespace HSPI_IRobot {
 				
 				case MissionCycle.Evac:
 					status = RobotStatus.Evac;
-					break;
-				
-				case MissionCycle.Train:
-					status = RobotStatus.Train;
 					break;
 			}
 
@@ -288,6 +285,7 @@ namespace HSPI_IRobot {
 					break;
 				
 				case RobotStatus.Clean:
+				case RobotStatus.Train:
 					switch (robot.Client.Phase) {
 						case MissionPhase.Charge:
 							jobPhase = CleanJobPhase.Charging;
