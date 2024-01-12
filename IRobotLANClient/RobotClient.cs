@@ -443,6 +443,10 @@ namespace IRobotLANClient {
 				case "train":
 					Cycle = MissionCycle.Train;
 					break;
+				
+				case "quick":
+					Cycle = MissionCycle.Quick;
+					break;
 
 				default:
 					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionCycle", Value = missionCycle});

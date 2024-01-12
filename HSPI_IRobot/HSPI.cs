@@ -244,6 +244,7 @@ namespace HSPI_IRobot {
 				
 				case MissionCycle.Clean:
 				case MissionCycle.Spot:
+				case MissionCycle.Quick:
 				case MissionCycle.Train:
 					switch (robot.Client.Phase) {
 						case MissionPhase.Stop:

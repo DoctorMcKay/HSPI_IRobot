@@ -6,6 +6,7 @@
 		Spot,
 		Dock,
 		Evac,
-		Train
+		Train,
+		Quick
 	}
 }
