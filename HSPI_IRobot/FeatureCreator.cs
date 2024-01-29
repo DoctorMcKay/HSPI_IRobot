@@ -150,7 +150,7 @@ namespace HSPI_IRobot {
 
 		private int _createReady() {
 			FeatureFactory factory = _getFactory()
-				.WithName("Readiess")
+				.WithName("Readiness")
 				.WithAddress($"{_device.Address}:Ready")
 				.WithExtraData(_versionExtraData(3))
 				.AddGraphicForValue("/images/HomeSeer/status/ok.png", 0, "Ready")
