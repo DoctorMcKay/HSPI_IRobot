@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
+using IRobotLANClient.RobotInterfaces;
 
 namespace HSPI_IRobot;
 
@@ -151,23 +152,23 @@ public abstract class RobotOptions {
 				return true;
 				
 			case ConfigOption.BinFullPause:
-				((RobotVacuumClient) robot.Client).SetBinFullPause(settingValue != 0);
+				((IVacuumClient) robot.Client).SetBinFullPause(settingValue != 0);
 				return true;
 				
 			case ConfigOption.CleaningPassMode:
-				((RobotVacuumClient) robot.Client).SetCleaningPassMode((CleaningPassMode) settingValue);
+				((IVacuumClient) robot.Client).SetCleaningPassMode((CleaningPassMode) settingValue);
 				return true;
 				
 			case ConfigOption.WetMopPadWetness:
-				((RobotMopClient) robot.Client).SetWetMopPadWetness((byte) settingValue);
+				((IMopClient) robot.Client).SetWetMopPadWetness((byte) settingValue);
 				return true;
 				
 			case ConfigOption.WetMopPassOverlap:
-				((RobotMopClient) robot.Client).SetWetMopRankOverlap((byte) settingValue);
+				((IMopClient) robot.Client).SetWetMopRankOverlap((byte) settingValue);
 				return true;
 				
 			case ConfigOption.EvacAllowed:
-				((RobotVacuumClient) robot.Client).SetEvacAllowed(settingValue != 0);
+				((IVacuumClient) robot.Client).SetEvacAllowed(settingValue != 0);
 				return true;
 				
 			default:

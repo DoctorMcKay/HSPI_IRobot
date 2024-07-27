@@ -2,7 +2,7 @@
 
 namespace IRobotLANClient.RobotInterfaces;
 
-internal interface IVacuumClient {
+public interface IVacuumClient {
 	public BinStatus BinStatus { get; internal set; }
 	public bool EvacAllowed { get; internal set; }
 	public bool BinFullPause { get; internal set; }

@@ -18,6 +18,7 @@ using HSPI_IRobot.HsEvents;
 using IRobotLANClient;
 using IRobotLANClient.Enums;
 using IRobotLANClient.Exceptions;
+using IRobotLANClient.RobotInterfaces;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -158,11 +159,10 @@ public class HSPI : AbstractPlugin {
 					break;
 					
 				case RobotStatus.Evac:
-					if (robot.Type == RobotType.Vacuum) {
-						RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
-						roboVac.Evac();
+					if (robot.Client is IVacuumClient client) {
+						client.Evac();
 					}
-
+					
 					break;
 					
 				case RobotStatus.Train:
@@ -341,28 +341,22 @@ public class HSPI : AbstractPlugin {
 		feature = robot.GetFeature(FeatureType.Error);
 		HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, robot.Client.ErrorCode);
 
-		switch (robot.Type) {
-			case RobotType.Vacuum:
-				RobotVacuumClient roboVac = (RobotVacuumClient) robot.Client;
+		if (robot.Client is IVacuumClient roboVac) {
+			// Bin
+			feature = robot.GetFeature(FeatureType.VacuumBin);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboVac.BinStatus);
+		}
+
+		if (robot.Client is IMopClient roboMop) {
+			// Tank
+			feature = robot.GetFeature(FeatureType.MopTank);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboMop.TankStatus);
 					
-				// Bin
-				feature = robot.GetFeature(FeatureType.VacuumBin);
-				HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboVac.BinStatus);
-					
-				break;
-				
-			case RobotType.Mop:
-				RobotMopClient roboMop = (RobotMopClient) robot.Client;
-					
-				// Tank
-				feature = robot.GetFeature(FeatureType.MopTank);
-				HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboMop.TankStatus);
-					
-				// Pad type
-				feature = robot.GetFeature(FeatureType.MopPad);
-				HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboMop.MopPadType);
-					
-				break;
+			// Pad type
+			feature = robot.GetFeature(FeatureType.MopPad);
+			HomeSeerSystem.UpdateFeatureValueByRef(feature.Ref, (double) roboMop.MopPadType);
+			
+			// TODO tank and dock tank level features for Combo
 		}
 			
 		// Did our navigating state change?
@@ -459,23 +453,23 @@ public class HSPI : AbstractPlugin {
 						break;
 						
 					case ConfigOption.BinFullPause:
-						currentSetting = ((RobotVacuumClient) robot.Client).BinFullPause ? "1" : "0";
+						currentSetting = ((IVacuumClient) robot.Client).BinFullPause ? "1" : "0";
 						break;
 						
 					case ConfigOption.CleaningPassMode:
-						currentSetting = ((int) ((RobotVacuumClient) robot.Client).CleaningPassMode).ToString();
+						currentSetting = ((int) ((IVacuumClient) robot.Client).CleaningPassMode).ToString();
 						break;
 						
 					case ConfigOption.WetMopPadWetness:
-						currentSetting = ((RobotMopClient) robot.Client).WetMopPadWetness.ToString();
+						currentSetting = ((IMopClient) robot.Client).WetMopPadWetness.ToString();
 						break;
 						
 					case ConfigOption.WetMopPassOverlap:
-						currentSetting = ((RobotMopClient) robot.Client).WetMopRankOverlap.ToString();
+						currentSetting = ((IMopClient) robot.Client).WetMopRankOverlap.ToString();
 						break;
 						
 					case ConfigOption.EvacAllowed:
-						currentSetting = ((RobotVacuumClient) robot.Client).EvacAllowed ? "1" : "0";
+						currentSetting = ((IVacuumClient) robot.Client).EvacAllowed ? "1" : "0";
 						break;
 						
 					default:
@@ -639,7 +633,7 @@ public class HSPI : AbstractPlugin {
 		extraData.AddNamed("lastknownip", ip);
 		extraData.AddNamed("blid", blid);
 		extraData.AddNamed("password", password);
-		extraData.AddNamed("robottype", verifier.DetectedType == RobotType.Vacuum ? "vacuum" : "mop");
+		extraData.AddNamed("robottype", verifier.DetectedType.ToString().ToLower());
 		extraData.AddNamed("version", "1");
 
 		DeviceFactory factory = DeviceFactory.CreateDevice(Id)

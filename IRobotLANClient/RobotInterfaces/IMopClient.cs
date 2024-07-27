@@ -2,7 +2,7 @@
 
 namespace IRobotLANClient.RobotInterfaces;
 
-internal interface IMopClient {
+public interface IMopClient {
 	public TankStatus TankStatus { get; internal set; }
 	public MopPadType MopPadType { get; internal set; }
 	public byte WetMopPadWetness { get; internal set; }

@@ -86,7 +86,7 @@ public class ManageRobots : AbstractFeaturePageHandler {
 				password = robot.Password,
 				stateString = robot.StateString,
 				ip = robot.ConnectedIp,
-				type = robot.Type == RobotType.Vacuum ? "vacuum" : "mop",
+				type = RobotType.Vacuum.ToString().ToLower(),
 				name = robot.GetName(),
 				sku = robot.Client?.Sku ?? "unknown",
 				softwareVersion = robot.Client?.SoftwareVersion ?? "unknown"

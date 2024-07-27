@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using HomeSeer.PluginSdk.Devices;
 using HomeSeer.PluginSdk.Logging;
@@ -59,7 +60,7 @@ public class HsRobot {
 
 		try {
 			PlugExtraData ped = PlugExtraData;
-			Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+			Type = StringToRobotType(ped["robottype"]);
 			Blid = ped["blid"];
 			Password = ped["password"];
 				
@@ -78,7 +79,7 @@ public class HsRobot {
 			// Try to init again
 			try {
 				PlugExtraData ped = PlugExtraData;
-				Type = ped["robottype"] == "vacuum" ? RobotType.Vacuum : RobotType.Mop;
+				Type = StringToRobotType(ped["robottype"]);
 				Blid = ped["blid"];
 				Password = ped["password"];
 			} catch (KeyNotFoundException) {
@@ -111,12 +112,12 @@ public class HsRobot {
 		WriteLog(ELogType.Info, $"Attempting to connect to robot at IP {connectIp} ({Blid})");
 
 		Client = null;
-		RobotClient robot;
-		if (Type == RobotType.Vacuum) {
-			robot = new RobotVacuumClient(connectIp, Blid, Password);
-		} else {
-			robot = new RobotMopClient(connectIp, Blid, Password);
-		}
+		RobotClient robot = Type switch {
+			RobotType.Vacuum => new RobotVacuumClient(connectIp, Blid, Password),
+			RobotType.Mop => new RobotMopClient(connectIp, Blid, Password),
+			RobotType.Combo => new RobotComboClient(connectIp, Blid, Password),
+			_ => throw new ArgumentOutOfRangeException()
+		};
 			
 		robot.OnStateUpdated += HandleDataUpdate;
 		robot.OnDebugOutput += (sender, args) => {
@@ -463,6 +464,15 @@ public class HsRobot {
 		return Enum.GetValues(typeof(ConfigOption)).OfType<ConfigOption>()
 			.Where(option => Client.SupportsConfigOption(option))
 			.ToArray();
+	}
+	
+	private static RobotType StringToRobotType(string type) {
+		return type switch {
+			"vacuum" => RobotType.Vacuum,
+			"mop" => RobotType.Mop,
+			"combo" => RobotType.Combo,
+			_ => RobotType.Unrecognized
+		};
 	}
 
 	private void WriteLog(ELogType logType, string message, [CallerLineNumber] int lineNumber = 0, [CallerMemberName] string caller = null) {
