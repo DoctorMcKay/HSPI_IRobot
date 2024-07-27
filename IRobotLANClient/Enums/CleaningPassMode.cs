@@ -1,7 +1,7 @@
-﻿namespace IRobotLANClient.Enums {
-	public enum CleaningPassMode {
-		AutoPass,
-		OnePass,
-		TwoPass
-	}
+﻿namespace IRobotLANClient.Enums;
+
+public enum CleaningPassMode {
+	AutoPass,
+	OnePass,
+	TwoPass
 }

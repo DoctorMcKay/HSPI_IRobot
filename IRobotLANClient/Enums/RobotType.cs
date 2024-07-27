@@ -1,8 +1,8 @@
-﻿namespace IRobotLANClient.Enums {
-	public enum RobotType {
-		Unrecognized,
-		Vacuum,
-		Mop,
-		Combo
-	}
+﻿namespace IRobotLANClient.Enums;
+
+public enum RobotType {
+	Unrecognized,
+	Vacuum,
+	Mop,
+	Combo
 }

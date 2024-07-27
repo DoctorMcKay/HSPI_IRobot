@@ -1,17 +1,17 @@
 ﻿using Newtonsoft.Json;
 
-namespace IRobotLANClient.JsonObjects {
-	[JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
-	public class ReportedStateVacuum {
-		[JsonProperty("bin")] public BinType Bin;
-		[JsonProperty("binPause")] public bool BinPause;
-		[JsonProperty("noAutoPasses")] public bool NoAutoPasses;
-		[JsonProperty("twoPass")] public bool TwoPass;
-		[JsonProperty("evacAllowed")] public bool? EvacAllowed;
+namespace IRobotLANClient.JsonObjects;
 
-		public class BinType {
-			[JsonProperty("present")] public bool Present;
-			[JsonProperty("full")] public bool Full;
-		}
+[JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
+public class ReportedStateVacuum {
+	[JsonProperty("bin")] public BinType Bin;
+	[JsonProperty("binPause")] public bool BinPause;
+	[JsonProperty("noAutoPasses")] public bool NoAutoPasses;
+	[JsonProperty("twoPass")] public bool TwoPass;
+	[JsonProperty("evacAllowed")] public bool? EvacAllowed;
+
+	public class BinType {
+		[JsonProperty("present")] public bool Present;
+		[JsonProperty("full")] public bool Full;
 	}
 }
