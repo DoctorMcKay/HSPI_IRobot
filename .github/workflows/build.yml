@@ -15,10 +15,10 @@ jobs:
     - uses: actions/checkout@v1
     
     - name: Setup msbuild
-      uses: microsoft/setup-msbuild@v1
+      uses: microsoft/setup-msbuild@v2
       
     - name: Setup nuget
-      uses: nuget/setup-nuget@v1
+      uses: nuget/setup-nuget@v2
       
     - name: Nuget restore
       run: nuget restore HSPI_IRobot.sln
@@ -54,13 +54,13 @@ jobs:
         cp html\*.* artifacts-debug
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: iRobot_${{ env.release_version }}
         path: artifacts
     
     - name: Upload debug artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Debug Build
         path: artifacts-debug
