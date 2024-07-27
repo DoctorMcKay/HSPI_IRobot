@@ -11,7 +11,7 @@
         <AssemblyName>IRobotLANClient</AssemblyName>
         <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
         <FileAlignment>512</FileAlignment>
-        <LangVersion>7.3</LangVersion>
+        <LangVersion>12</LangVersion>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
         <PlatformTarget>AnyCPU</PlatformTarget>
@@ -62,7 +62,12 @@
         <Compile Include="RobotClient.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
         <Compile Include="DiscoveryClient.cs" />
+        <Compile Include="RobotComboClient.cs" />
+        <Compile Include="RobotInterfaces\IMopClient.cs" />
+        <Compile Include="RobotInterfaces\IVacuumClient.cs" />
         <Compile Include="RobotMopClient.cs" />
+        <Compile Include="RobotUpdaters\MopUpdater.cs" />
+        <Compile Include="RobotUpdaters\VacuumUpdater.cs" />
         <Compile Include="RobotVacuumClient.cs" />
         <Compile Include="RobotVerifierClient.cs" />
     </ItemGroup>

@@ -2,6 +2,7 @@
 	public enum RobotType {
 		Unrecognized,
 		Vacuum,
-		Mop
+		Mop,
+		Combo
 	}
 }

@@ -14,288 +14,289 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Timer = System.Timers.Timer;
 
-namespace IRobotLANClient {
-	public abstract class RobotClient {
-		public bool Connected { get; private set; }
-		public JObject ReportedState { get; private set; } = new JObject();
-		public JObject LastJobStartCommand { get; private set; } = null;
-		public string Name { get; private set; }
-		public string Sku { get; private set; }
-		public byte BatteryLevel { get; private set; }
-		public ChargeLightRingPattern ChargeLightRingPattern { get; private set; }
-		public bool ChildLock { get; private set; }
-		public MissionCycle Cycle { get; private set; }
-		public MissionPhase Phase { get; private set; }
-		public int ErrorCode { get; private set; }
-		public int NotReadyCode { get; private set; }
-		public bool CanLearnMaps { get; private set; }
-		public byte SoftwareUpdateDownloadProgress { get; private set; }
-		public string SoftwareVersion { get; private set; }
+namespace IRobotLANClient;
 
-		public event EventHandler OnConnected;
-		public event EventHandler OnDisconnected;
-		public event EventHandler OnStateUpdated;
-		public event EventHandler<UnexpectedValueEventArgs> OnUnexpectedValue;
-		public event EventHandler<DebugOutputEventArgs> OnDebugOutput;
+public abstract class RobotClient {
+	public bool Connected { get; private set; }
+	public JObject ReportedState { get; private set; } = new JObject();
+	public JObject LastJobStartCommand { get; private set; } = null;
+	public string Name { get; private set; }
+	public string Sku { get; private set; }
+	public byte BatteryLevel { get; private set; }
+	public ChargeLightRingPattern ChargeLightRingPattern { get; private set; }
+	public bool ChildLock { get; private set; }
+	public MissionCycle Cycle { get; private set; }
+	public MissionPhase Phase { get; private set; }
+	public int ErrorCode { get; private set; }
+	public int NotReadyCode { get; private set; }
+	public bool CanLearnMaps { get; private set; }
+	public byte SoftwareUpdateDownloadProgress { get; private set; }
+	public string SoftwareVersion { get; private set; }
 
-		protected IMqttClient MqttClient;
-		protected readonly string Address;
-		protected readonly string Blid;
-		protected readonly string Password;
+	public event EventHandler OnConnected;
+	public event EventHandler OnDisconnected;
+	public event EventHandler OnStateUpdated;
+	public event EventHandler<UnexpectedValueEventArgs> OnUnexpectedValue;
+	public event EventHandler<DebugOutputEventArgs> OnDebugOutput;
 
-		private string MqttStatusTopic => $"$aws/things/{Blid}/shadow/update";
+	protected IMqttClient MqttClient;
+	protected readonly string Address;
+	protected readonly string Blid;
+	protected readonly string Password;
 
-		private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-		private bool _awaitingFirstReport;
-		private bool _awaitingFirstReportTimer;
-		private DateTime _connectedTime;
+	private string MqttStatusTopic => $"$aws/things/{Blid}/shadow/update";
 
-		private readonly TaskCompletionSource<Exception> _exceptionSource;
+	private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+	private bool _awaitingFirstReport;
+	private bool _awaitingFirstReportTimer;
+	private DateTime _connectedTime;
 
-		#if DEBUG
+	private readonly TaskCompletionSource<Exception> _exceptionSource;
+
+#if DEBUG
 		private static bool SpoofingSoftwareUpdate;
-		#endif
+#endif
 
-		public RobotClient(string address, string blid, string password) {
-			Connected = false;
-			Address = address;
-			Blid = blid;
-			Password = password;
+	public RobotClient(string address, string blid, string password) {
+		Connected = false;
+		Address = address;
+		Blid = blid;
+		Password = password;
 
-			_exceptionSource = new TaskCompletionSource<Exception>();
-			_exceptionSource.Task.ContinueWith(task => throw task.Result);
-		}
+		_exceptionSource = new TaskCompletionSource<Exception>();
+		_exceptionSource.Task.ContinueWith(task => throw task.Result);
+	}
 
-		public async Task<MqttClientConnectResult> Connect() {
-			MqttFactory factory = new MqttFactory();
-			MqttClient = factory.CreateMqttClient();
+	public async Task<MqttClientConnectResult> Connect() {
+		MqttFactory factory = new MqttFactory();
+		MqttClient = factory.CreateMqttClient();
 
-			MqttClientTlsOptions tlsOptions = new MqttClientTlsOptionsBuilder()
-				.WithAllowUntrustedCertificates(true)
-				.WithCertificateValidationHandler(_ => true)
-				.WithSslProtocols(SslProtocols.Tls12)
-				.UseTls(true)
-				.Build();
+		MqttClientTlsOptions tlsOptions = new MqttClientTlsOptionsBuilder()
+			.WithAllowUntrustedCertificates(true)
+			.WithCertificateValidationHandler(_ => true)
+			.WithSslProtocols(SslProtocols.Tls12)
+			.UseTls(true)
+			.Build();
 
-			MqttClientOptions clientOptions = new MqttClientOptionsBuilder()
-				.WithTcpServer(Address, 8883)
-				.WithCredentials(Blid, Password)
-				.WithClientId(Blid)
-				.WithTlsOptions(tlsOptions)
-				.WithProtocolVersion(MqttProtocolVersion.V311)
-				.WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
-				.WithTimeout(TimeSpan.FromSeconds(5))
-				.Build();
+		MqttClientOptions clientOptions = new MqttClientOptionsBuilder()
+			.WithTcpServer(Address, 8883)
+			.WithCredentials(Blid, Password)
+			.WithClientId(Blid)
+			.WithTlsOptions(tlsOptions)
+			.WithProtocolVersion(MqttProtocolVersion.V311)
+			.WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
+			.WithTimeout(TimeSpan.FromSeconds(5))
+			.Build();
 			
-			MqttClient.ConnectedAsync += OnConnectedAsync;
-			MqttClient.DisconnectedAsync += OnDisconnectedAsync;
-			MqttClient.ApplicationMessageReceivedAsync += OnApplicationMessageReceived;
+		MqttClient.ConnectedAsync += OnConnectedAsync;
+		MqttClient.DisconnectedAsync += OnDisconnectedAsync;
+		MqttClient.ApplicationMessageReceivedAsync += OnApplicationMessageReceived;
 
-			#if DEBUG
+#if DEBUG
 			if (SpoofingSoftwareUpdate) {
 				throw new Exception("Spoofing software update");
 			}
 			
 			Console.WriteLine($"MQTT client connecting to {Address} with blid {Blid}");
-			#endif
+#endif
 
-			_awaitingFirstReport = true;
+		_awaitingFirstReport = true;
 			
-			// Sometimes it appears that the connect attempt can just hang, and I'm not sure if there's some way to fix it
-			// within the MQTT library. But using our own timeout should work, at least.
-			Timer connectTimeout = new Timer {
-				Interval = 10000,
-				Enabled = true,
-				AutoReset = false
-			};
+		// Sometimes it appears that the connect attempt can just hang, and I'm not sure if there's some way to fix it
+		// within the MQTT library. But using our own timeout should work, at least.
+		Timer connectTimeout = new Timer {
+			Interval = 10000,
+			Enabled = true,
+			AutoReset = false
+		};
 
-			connectTimeout.Elapsed += (src, arg) => {
-				DebugOutput($"Internal connection timeout elapsed for {Blid}");
-				SignalCancellation();
-				// ReSharper disable once AccessToDisposedClosure
-				connectTimeout.Dispose();
-			};
+		connectTimeout.Elapsed += (src, arg) => {
+			DebugOutput($"Internal connection timeout elapsed for {Blid}");
+			SignalCancellation();
+			// ReSharper disable once AccessToDisposedClosure
+			connectTimeout.Dispose();
+		};
 
-			DateTime connectStartTime = DateTime.Now;
-			try {
-				MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
-				DebugOutput($"Connect result {result.ResultCode} for {Blid}");
+		DateTime connectStartTime = DateTime.Now;
+		try {
+			MqttClientConnectResult result = await MqttClient.ConnectAsync(clientOptions, _cancellationTokenSource.Token);
+			DebugOutput($"Connect result {result.ResultCode} for {Blid}");
 
-				_connectedTime = DateTime.Now;
+			_connectedTime = DateTime.Now;
 
-				// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
-				// but let's subscribe anyway just to be a good citizen
-				await MqttClient.SubscribeAsync(MqttStatusTopic);
-				ReportedState = new JObject(); // Reset reported state
+			// Subscribing to the status topic isn't strictly necessary as the robot sends us those updates by default,
+			// but let's subscribe anyway just to be a good citizen
+			await MqttClient.SubscribeAsync(MqttStatusTopic);
+			ReportedState = new JObject(); // Reset reported state
 				
-				// Connection succeeded
-				connectTimeout.Stop();
-				connectTimeout.Dispose();
+			// Connection succeeded
+			connectTimeout.Stop();
+			connectTimeout.Dispose();
 
-				return result;
-			} catch (OperationCanceledException) {
-				throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
-			} catch (Exception ex) {
-				connectTimeout.Stop();
-				connectTimeout.Dispose();
+			return result;
+		} catch (OperationCanceledException) {
+			throw new Exception($"Connection timed out after {DateTime.Now.Subtract(connectStartTime).TotalMilliseconds} milliseconds");
+		} catch (Exception ex) {
+			connectTimeout.Stop();
+			connectTimeout.Dispose();
 				
-				for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
-					if (checkException.Message.Contains("BadUserNameOrPassword")) {
-						throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
-					}
-
-					if (checkException.Message.Contains("actively refused it") || checkException.Message.Contains("Connection refused")) {
-						throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
-					}
-
-					if (checkException.Message.Contains("timed out")) {
-						throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
-					}
+			for (Exception checkException = ex; checkException != null; checkException = checkException.InnerException) {
+				if (checkException.Message.Contains("BadUserNameOrPassword")) {
+					throw new RobotConnectionException("Robot password is incorrect", ConnectionError.IncorrectCredentials, ex);
 				}
 
-				throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
-			}
-		}
+				if (checkException.Message.Contains("actively refused it") || checkException.Message.Contains("Connection refused")) {
+					throw new RobotConnectionException("Connection refused", ConnectionError.ConnectionRefused, ex);
+				}
 
-		private Task OnConnectedAsync(MqttClientConnectedEventArgs args) {
-			// This is going to look ridiculous, but that's only because it is. MQTTnet swallows exceptions thrown in
-			// event handlers, because apparently continuing with undefined behavior if an exception isn't handled is
-			// preferable to crashing the app. So we have to escape this context to re-throw unhandled exceptions.
-			
-			// This was true in v3, unsure if this is still true in v4.
-			try {
-				ConnectedStateChanged(true);
-			} catch (Exception ex) {
-				_exceptionSource.SetResult(ex);
+				if (checkException.Message.Contains("timed out")) {
+					throw new RobotConnectionException("Connection timed out", ConnectionError.ConnectionTimedOut, ex);
+				}
 			}
-			
-			return Task.CompletedTask;
+
+			throw new RobotConnectionException("Unspecified connection error", ConnectionError.UnspecifiedError, ex);
 		}
+	}
+
+	private Task OnConnectedAsync(MqttClientConnectedEventArgs args) {
+		// This is going to look ridiculous, but that's only because it is. MQTTnet swallows exceptions thrown in
+		// event handlers, because apparently continuing with undefined behavior if an exception isn't handled is
+		// preferable to crashing the app. So we have to escape this context to re-throw unhandled exceptions.
+			
+		// This was true in v3, unsure if this is still true in v4.
+		try {
+			ConnectedStateChanged(true);
+		} catch (Exception ex) {
+			_exceptionSource.SetResult(ex);
+		}
+			
+		return Task.CompletedTask;
+	}
 		
-		private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs eventArgs) {
-			try {
-				ConnectedStateChanged(false);
-			} catch (Exception ex) {
-				_exceptionSource.SetResult(ex);
+	private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs eventArgs) {
+		try {
+			ConnectedStateChanged(false);
+		} catch (Exception ex) {
+			_exceptionSource.SetResult(ex);
+		}
+
+		return Task.CompletedTask;
+	}
+
+	private Task OnApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs args) {
+		try {
+			ApplicationMessageReceived(args.ApplicationMessage);
+		} catch (Exception ex) {
+			_exceptionSource.SetResult(ex);
+		}
+
+		return Task.CompletedTask;
+	}
+
+	public async Task Disconnect() {
+		if (!MqttClient.IsConnected) {
+			return; // nothing to do
+		}
+
+		await MqttClient.DisconnectAsync();
+	}
+
+	public abstract bool IsCorrectRobotType();
+
+	public async Task<bool> WaitForTypeValidation(int timeoutMilliseconds) {
+		DateTime start = DateTime.Now;
+
+		while (DateTime.Now.Subtract(start).TotalMilliseconds < timeoutMilliseconds) {
+			if (IsCorrectRobotType()) {
+				return true;
 			}
 
-			return Task.CompletedTask;
+			await Task.Delay(100);
 		}
 
-		private Task OnApplicationMessageReceived(MqttApplicationMessageReceivedEventArgs args) {
-			try {
-				ApplicationMessageReceived(args.ApplicationMessage);
-			} catch (Exception ex) {
-				_exceptionSource.SetResult(ex);
-			}
+		// Validation timed out
+		return false;
+	}
 
-			return Task.CompletedTask;
+	public void Clean() {
+		SendCommand("start");
+	}
+
+	public void CleanCustom(JObject command) {
+		SendCommand("start", command);
+	}
+
+	public void Stop() {
+		SendCommand("stop");
+	}
+
+	public void Pause() {
+		SendCommand("pause");
+	}
+
+	public void Resume() {
+		SendCommand("resume");
+	}
+
+	public void Dock() {
+		SendCommand("dock");
+	}
+
+	public void Find() {
+		SendCommand("find");
+	}
+
+	public void Train() {
+		SendCommand("train");
+	}
+
+	public void Reboot() {
+		SendCommand("reset");
+	}
+
+	protected async void SendCommand(string command, JObject commandParams = null) {
+		DateTime unixEpoch = new DateTime(1970, 1, 1);
+
+		JObject cmd = commandParams != null ? (JObject) commandParams.DeepClone() : new JObject();
+		cmd["command"] = command;
+		cmd["time"] = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds;
+		cmd["initiator"] = "localApp";
+
+		MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
+			.WithTopic("cmd")
+			.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(cmd)))
+			.Build();
+
+		try {
+			await MqttClient.PublishAsync(msg, _cancellationTokenSource.Token);
+		} catch (Exception) {
+			// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
 		}
+	}
 
-		public async Task Disconnect() {
-			if (!MqttClient.IsConnected) {
-				return; // nothing to do
-			}
+	public virtual bool SupportsConfigOption(ConfigOption option) {
+		// All of these checks are based on my limited vision into i7 and 890
+		switch (option) {
+			case ConfigOption.ChargeLightRingPattern:
+				return (int) (ReportedState.SelectToken("featureFlags.chrgLrPtrnEnable") ?? JToken.FromObject(0)) == 1;
 
-			await MqttClient.DisconnectAsync();
+			case ConfigOption.ChildLock:
+				return (int) (ReportedState.SelectToken("featureFlags.childLockEnable") ?? JToken.FromObject(0)) == 1;
+
+			default:
+				return false;
 		}
+	}
 
-		public abstract bool IsCorrectRobotType();
+	public void SetChargeLightRingPattern(ChargeLightRingPattern pattern) {
+		UpdateOption(new {chrgLrPtrn = (int) pattern});
+	}
 
-		public async Task<bool> WaitForTypeValidation(int timeoutMilliseconds) {
-			DateTime start = DateTime.Now;
+	public void SetChildLock(bool childLock) {
+		UpdateOption(new {childLock});
+	}
 
-			while (DateTime.Now.Subtract(start).TotalMilliseconds < timeoutMilliseconds) {
-				if (IsCorrectRobotType()) {
-					return true;
-				}
-
-				await Task.Delay(100);
-			}
-
-			// Validation timed out
-			return false;
-		}
-
-		public void Clean() {
-			SendCommand("start");
-		}
-
-		public void CleanCustom(JObject command) {
-			SendCommand("start", command);
-		}
-
-		public void Stop() {
-			SendCommand("stop");
-		}
-
-		public void Pause() {
-			SendCommand("pause");
-		}
-
-		public void Resume() {
-			SendCommand("resume");
-		}
-
-		public void Dock() {
-			SendCommand("dock");
-		}
-
-		public void Find() {
-			SendCommand("find");
-		}
-
-		public void Train() {
-			SendCommand("train");
-		}
-
-		public void Reboot() {
-			SendCommand("reset");
-		}
-
-		protected async void SendCommand(string command, JObject commandParams = null) {
-			DateTime unixEpoch = new DateTime(1970, 1, 1);
-
-			JObject cmd = commandParams != null ? (JObject) commandParams.DeepClone() : new JObject();
-			cmd["command"] = command;
-			cmd["time"] = (long) DateTime.Now.Subtract(unixEpoch).TotalSeconds;
-			cmd["initiator"] = "localApp";
-
-			MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
-				.WithTopic("cmd")
-				.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(cmd)))
-				.Build();
-
-			try {
-				await MqttClient.PublishAsync(msg, _cancellationTokenSource.Token);
-			} catch (Exception) {
-				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
-			}
-		}
-
-		public virtual bool SupportsConfigOption(ConfigOption option) {
-			// All of these checks are based on my limited vision into i7 and 890
-			switch (option) {
-				case ConfigOption.ChargeLightRingPattern:
-					return (int) (ReportedState.SelectToken("featureFlags.chrgLrPtrnEnable") ?? JToken.FromObject(0)) == 1;
-
-				case ConfigOption.ChildLock:
-					return (int) (ReportedState.SelectToken("featureFlags.childLockEnable") ?? JToken.FromObject(0)) == 1;
-
-				default:
-					return false;
-			}
-		}
-
-		public void SetChargeLightRingPattern(ChargeLightRingPattern pattern) {
-			UpdateOption(new {chrgLrPtrn = (int) pattern});
-		}
-
-		public void SetChildLock(bool childLock) {
-			UpdateOption(new {childLock});
-		}
-
-		#if DEBUG
+#if DEBUG
 		public void SpoofSoftwareUpdate() {
 			Console.WriteLine("Spoofing software update");
 
@@ -317,88 +318,88 @@ namespace IRobotLANClient {
 				}
 			};
 		}
-		#endif
+#endif
 
-		protected void UpdateOption(object request) {
-			MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
-				.WithTopic("delta")
-				.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new {state = request})))
-				.Build();
+	protected void UpdateOption(object request) {
+		MqttApplicationMessage msg = new MqttApplicationMessageBuilder()
+			.WithTopic("delta")
+			.WithPayload(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new {state = request})))
+			.Build();
 
-			try {
-				MqttClient.PublishAsync(msg, _cancellationTokenSource.Token).Wait();
-			} catch (Exception) {
-				// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
-			}
+		try {
+			MqttClient.PublishAsync(msg, _cancellationTokenSource.Token).Wait();
+		} catch (Exception) {
+			// We don't want to crash if an exception is raised; the Disconnected handler will fire on its own
 		}
+	}
 
-		internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
-			string jsonPayload = Encoding.UTF8.GetString(msg.PayloadSegment.ToArray());
-			JObject payload = JObject.Parse(jsonPayload);
+	internal void ApplicationMessageReceived(MqttApplicationMessage msg) {
+		string jsonPayload = Encoding.UTF8.GetString(msg.PayloadSegment.ToArray());
+		JObject payload = JObject.Parse(jsonPayload);
 
-			bool isStatusUpdate = msg.Topic == MqttStatusTopic;
+		bool isStatusUpdate = msg.Topic == MqttStatusTopic;
 
-			#if DEBUG
+#if DEBUG
 			if (!isStatusUpdate && msg.Topic != "wifistat" && msg.Topic != "logUpload") {
 				Console.WriteLine($"Received message with topic {msg.Topic}");
 			}
-			#endif
+#endif
 
-			if (!isStatusUpdate) {
-				return;
-			}
-
-			// This is a robot status update
-			JObject stateUpdate = (JObject) payload.SelectToken("state.reported");
-			if (stateUpdate == null) {
-				// This shouldn't ordinarily happen, but in case it does...
-				return;
-			}
-
-			// First let's find the differences between the two objects for debugging purposes
-			JObject previousReportedState = JObject.Parse(ReportedState.ToString());
-
-			foreach (JProperty prop in stateUpdate.Properties()) {
-				ReportedState[prop.Name] = prop.Value;
-			}
-
-			foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
-				DebugOutput(change);
-			}
-
-			// Some robots don't send their entire state all at once upon connecting, which can cause problems since
-			// a lot of our code expects the entire state to be there once we receive a report. So let's wait 1 second
-			// after receiving the first report for additional reports to come in.
-
-			if (_awaitingFirstReport) {
-				DebugOutput($"Received first report after {DateTime.Now.Subtract(_connectedTime).TotalMilliseconds} ms");
-				_awaitingFirstReport = false;
-				_awaitingFirstReportTimer = true;
-
-				Task.Run(async () => {
-					await Task.Delay(1000);
-					_awaitingFirstReportTimer = false;
-					ProcessStateUpdate();
-				});
-			}
-
-			if (!_awaitingFirstReportTimer) {
-				ProcessStateUpdate();
-			}
+		if (!isStatusUpdate) {
+			return;
 		}
 
-		private void ProcessStateUpdate() {
-			ReportedState state = JsonConvert.DeserializeObject<ReportedState>(ReportedState.ToString());
-			Name = state.Name;
-			Sku = state.Sku;
-			BatteryLevel = state.BatPct;
-			ChildLock = state.ChildLock;
+		// This is a robot status update
+		JObject stateUpdate = (JObject) payload.SelectToken("state.reported");
+		if (stateUpdate == null) {
+			// This shouldn't ordinarily happen, but in case it does...
+			return;
+		}
 
-			// This will default to DockingAndCharging if the robot doesn't support light ring patterns, so it's up to
-			// the consumer to check that the robot supports the feature before actually trusting this value.
-			ChargeLightRingPattern = (ChargeLightRingPattern) state.ChrgLrPtrn;
+		// First let's find the differences between the two objects for debugging purposes
+		JObject previousReportedState = JObject.Parse(ReportedState.ToString());
 
-			#if DEBUG
+		foreach (JProperty prop in stateUpdate.Properties()) {
+			ReportedState[prop.Name] = prop.Value;
+		}
+
+		foreach (string change in JsonCompare.Compare(previousReportedState, ReportedState)) {
+			DebugOutput(change);
+		}
+
+		// Some robots don't send their entire state all at once upon connecting, which can cause problems since
+		// a lot of our code expects the entire state to be there once we receive a report. So let's wait 1 second
+		// after receiving the first report for additional reports to come in.
+
+		if (_awaitingFirstReport) {
+			DebugOutput($"Received first report after {DateTime.Now.Subtract(_connectedTime).TotalMilliseconds} ms");
+			_awaitingFirstReport = false;
+			_awaitingFirstReportTimer = true;
+
+			Task.Run(async () => {
+				await Task.Delay(1000);
+				_awaitingFirstReportTimer = false;
+				ProcessStateUpdate();
+			});
+		}
+
+		if (!_awaitingFirstReportTimer) {
+			ProcessStateUpdate();
+		}
+	}
+
+	private void ProcessStateUpdate() {
+		ReportedState state = JsonConvert.DeserializeObject<ReportedState>(ReportedState.ToString());
+		Name = state.Name;
+		Sku = state.Sku;
+		BatteryLevel = state.BatPct;
+		ChildLock = state.ChildLock;
+
+		// This will default to DockingAndCharging if the robot doesn't support light ring patterns, so it's up to
+		// the consumer to check that the robot supports the feature before actually trusting this value.
+		ChargeLightRingPattern = (ChargeLightRingPattern) state.ChrgLrPtrn;
+
+#if DEBUG
 			/*
 			 * Observed cycle values: none, clean, spot, dock (sent to base without a job), evac, train (mapping run)
 			 * Observed phase values: charge, run, stuck, stop, hmUsrDock (user sent home), hmPostMsn (returning to dock after mission), hmMidMsn (returning to dock mid mission), evac, chargingerror
@@ -414,150 +415,149 @@ namespace IRobotLANClient {
 				(int) (ReportedState.SelectToken("cleanMissionStatus.operatingMode") ?? 0),
 				(string) (ReportedState.SelectToken("cleanMissionStatus.initiator") ?? 0)
 			));
-			#endif
+#endif
 
-			string missionCycle = state.CleanMissionStatus?.Cycle ?? "none";
-			string missionPhase = state.CleanMissionStatus?.Phase ?? "stop";
+		string missionCycle = state.CleanMissionStatus?.Cycle ?? "none";
+		string missionPhase = state.CleanMissionStatus?.Phase ?? "stop";
 
-			switch (missionCycle) {
-				case "none":
-					Cycle = MissionCycle.None;
-					break;
+		switch (missionCycle) {
+			case "none":
+				Cycle = MissionCycle.None;
+				break;
 
-				case "clean":
-					Cycle = MissionCycle.Clean;
-					break;
+			case "clean":
+				Cycle = MissionCycle.Clean;
+				break;
 
-				case "spot":
-					Cycle = MissionCycle.Spot;
-					break;
+			case "spot":
+				Cycle = MissionCycle.Spot;
+				break;
 
-				case "dock":
-					Cycle = MissionCycle.Dock;
-					break;
+			case "dock":
+				Cycle = MissionCycle.Dock;
+				break;
 
-				case "evac":
-					Cycle = MissionCycle.Evac;
-					break;
+			case "evac":
+				Cycle = MissionCycle.Evac;
+				break;
 
-				case "train":
-					Cycle = MissionCycle.Train;
-					break;
+			case "train":
+				Cycle = MissionCycle.Train;
+				break;
 				
-				case "quick":
-					Cycle = MissionCycle.Quick;
-					break;
+			case "quick":
+				Cycle = MissionCycle.Quick;
+				break;
 
-				default:
-					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionCycle", Value = missionCycle});
-					Cycle = MissionCycle.Unknown;
-					break;
-			}
+			default:
+				OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionCycle", Value = missionCycle});
+				Cycle = MissionCycle.Unknown;
+				break;
+		}
 
-			switch (missionPhase) {
-				case "charge":
-					Phase = MissionPhase.Charge;
-					break;
+		switch (missionPhase) {
+			case "charge":
+				Phase = MissionPhase.Charge;
+				break;
 
-				case "run":
-					Phase = MissionPhase.Run;
-					break;
+			case "run":
+				Phase = MissionPhase.Run;
+				break;
 
-				case "stuck":
-					Phase = MissionPhase.Stuck;
-					break;
+			case "stuck":
+				Phase = MissionPhase.Stuck;
+				break;
 
-				case "stop":
-					Phase = MissionPhase.Stop;
-					break;
+			case "stop":
+				Phase = MissionPhase.Stop;
+				break;
 
-				case "hmUsrDock":
-					Phase = MissionPhase.UserSentHome;
-					break;
+			case "hmUsrDock":
+				Phase = MissionPhase.UserSentHome;
+				break;
 
-				case "hmPostMsn":
-					Phase = MissionPhase.DockingAfterMission;
-					break;
+			case "hmPostMsn":
+				Phase = MissionPhase.DockingAfterMission;
+				break;
 
-				case "hmMidMsn":
-					Phase = MissionPhase.DockingMidMission;
-					break;
+			case "hmMidMsn":
+				Phase = MissionPhase.DockingMidMission;
+				break;
 
-				case "evac":
-					Phase = MissionPhase.Evac;
-					break;
+			case "evac":
+				Phase = MissionPhase.Evac;
+				break;
 
-				case "chargingerror":
-					Phase = MissionPhase.ChargingError;
-					break;
+			case "chargingerror":
+				Phase = MissionPhase.ChargingError;
+				break;
 
-				default:
-					OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionPhase", Value = missionPhase});
-					Phase = MissionPhase.Unknown;
-					break;
-			}
+			default:
+				OnUnexpectedValue?.Invoke(this, new UnexpectedValueEventArgs {ValueType = "MissionPhase", Value = missionPhase});
+				Phase = MissionPhase.Unknown;
+				break;
+		}
 
-			ErrorCode = state.CleanMissionStatus?.Error ?? 0;
-			NotReadyCode = state.CleanMissionStatus?.NotReady ?? 0;
-			CanLearnMaps = state.PmapLearningAllowed;
-			SoftwareVersion = state.SoftwareVer;
+		ErrorCode = state.CleanMissionStatus?.Error ?? 0;
+		NotReadyCode = state.CleanMissionStatus?.NotReady ?? 0;
+		CanLearnMaps = state.PmapLearningAllowed;
+		SoftwareVersion = state.SoftwareVer;
 
-			#if DEBUG
+#if DEBUG
 			if (!SpoofingSoftwareUpdate) {
 				SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
 			}
-			#else
-			SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
-			#endif
+#else
+		SoftwareUpdateDownloadProgress = state.OtaDownloadProgress;
+#endif
 
-			if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
-				LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
-			}
-
-			HandleRobotStateUpdate();
-
-			OnStateUpdated?.Invoke(this, null);
+		if (ReportedState.SelectToken("lastCommand.command")?.Value<string>() == "start") {
+			LastJobStartCommand = ReportedState.SelectToken("lastCommand")?.Value<JObject>();
 		}
 
-		protected abstract void HandleRobotStateUpdate();
+		HandleRobotStateUpdate();
 
-		internal void ConnectedStateChanged(bool connected) {
-			Connected = connected;
+		OnStateUpdated?.Invoke(this, null);
+	}
 
-			#if DEBUG
+	protected abstract void HandleRobotStateUpdate();
+
+	internal void ConnectedStateChanged(bool connected) {
+		Connected = connected;
+
+#if DEBUG
 			Console.WriteLine("MQTT client " + (connected ? "connected" : "disconnected"));
-			#endif
+#endif
 
-			if (connected) {
-				OnConnected?.Invoke(this, null);
-			} else {
-				OnDisconnected?.Invoke(this, null);
-				SignalCancellation(); // also cancel any outstanding communication
-			}
+		if (connected) {
+			OnConnected?.Invoke(this, null);
+		} else {
+			OnDisconnected?.Invoke(this, null);
+			SignalCancellation(); // also cancel any outstanding communication
 		}
+	}
 
-		protected void DebugOutput(string output) {
-			OnDebugOutput?.Invoke(this, new DebugOutputEventArgs {Output = output});
-		}
+	protected void DebugOutput(string output) {
+		OnDebugOutput?.Invoke(this, new DebugOutputEventArgs {Output = output});
+	}
 
-		private async void SignalCancellation() {
-			CancellationTokenSource tokenSource = _cancellationTokenSource;
-			tokenSource.Cancel();
+	private async void SignalCancellation() {
+		CancellationTokenSource tokenSource = _cancellationTokenSource;
+		tokenSource.Cancel();
 			
-			_cancellationTokenSource = new CancellationTokenSource();
+		_cancellationTokenSource = new CancellationTokenSource();
 
-			// Wait 2 minutes before disposing the old cancellation token source
-			await Task.Delay(120000);
-			tokenSource.Dispose();
-		}
+		// Wait 2 minutes before disposing the old cancellation token source
+		await Task.Delay(120000);
+		tokenSource.Dispose();
+	}
 
-		public class UnexpectedValueEventArgs : EventArgs {
-			public string ValueType { get; internal set; }
-			public string Value { get; internal set; }
-		}
+	public class UnexpectedValueEventArgs : EventArgs {
+		public string ValueType { get; internal set; }
+		public string Value { get; internal set; }
+	}
 
-		public class DebugOutputEventArgs : EventArgs {
-			public string Output { get; internal set; }
-		}
+	public class DebugOutputEventArgs : EventArgs {
+		public string Output { get; internal set; }
 	}
 }

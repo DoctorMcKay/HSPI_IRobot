@@ -7,27 +7,41 @@ using Newtonsoft.Json.Linq;
 
 namespace IRobotLANClient;
 
-public class RobotVacuumClient : RobotClient, IVacuumClient {
+public class RobotComboClient : RobotClient, IVacuumClient, IMopClient {
+	// Vacuum properties
 	public BinStatus BinStatus { get; set; }
 	public bool EvacAllowed { get; set; }
 	public bool BinFullPause { get; set; }
 	public CleaningPassMode CleaningPassMode { get; set; }
-
+		
+	// Mop properties
+	public TankStatus TankStatus { get; set; }
+	public MopPadType MopPadType { get; set; }
+	public byte WetMopPadWetness { get; set; }
+	public byte? WetMopRankOverlap { get; set; }
+	public byte TankLevel { get; set; }
+	public byte? DockTankLevel { get; set; }
+		
 	private readonly VacuumUpdater _vacuumUpdater;
-
-	public RobotVacuumClient(string address, string blid, string password) : base(address, blid, password) {
+	private readonly MopUpdater _mopUpdater;
+		
+	public RobotComboClient(string address, string blid, string password) : base(address, blid, password) {
 		_vacuumUpdater = new VacuumUpdater(this);
+		_mopUpdater = new MopUpdater(this);
 	}
 
 	public override bool IsCorrectRobotType() {
-		return ReportedState.ContainsKey("bin");
+		return ReportedState.ContainsKey("bin") && ReportedState.ContainsKey("padWetness");
 	}
 
 	protected override void HandleRobotStateUpdate() {
-		ReportedStateVacuum state = JsonConvert.DeserializeObject<ReportedStateVacuum>(ReportedState.ToString());
-		_vacuumUpdater.Update(state);
+		ReportedStateVacuum vacuumState = JsonConvert.DeserializeObject<ReportedStateVacuum>(ReportedState.ToString());
+		ReportedStateMop mopState = JsonConvert.DeserializeObject<ReportedStateMop>(ReportedState.ToString());
+			
+		_vacuumUpdater.Update(vacuumState);
+		_mopUpdater.Update(mopState);
 	}
-
+	
 	public override bool SupportsConfigOption(ConfigOption option) {
 		switch (option) {
 			case ConfigOption.CleaningPassMode:
@@ -38,6 +52,16 @@ public class RobotVacuumClient : RobotClient, IVacuumClient {
 				
 			case ConfigOption.EvacAllowed:
 				return ReportedState.SelectToken("evacAllowed") != null;
+			
+			case ConfigOption.WetMopPadWetness:
+				JToken wetMopPadWetnessToken =
+					ReportedState.SelectToken("padWetness.disposable") ?? ReportedState.SelectToken("padWetness.reusable");
+				return wetMopPadWetnessToken?.Type == JTokenType.Integer;
+				
+			case ConfigOption.WetMopPassOverlap:
+				// This key is also present on the i7 vacuum but I can't find a capability or feature flag that
+				// looks like it indicates whether this can be used.
+				return ReportedState.SelectToken("rankOverlap")?.Type == JTokenType.Integer;
 					
 			default:
 				return base.SupportsConfigOption(option);
@@ -76,5 +100,18 @@ public class RobotVacuumClient : RobotClient, IVacuumClient {
 
 	public void Evac() {
 		SendCommand("evac");
+	}
+	
+	public void SetWetMopPadWetness(byte wetness) {
+		UpdateOption(new {
+			padWetness = new {
+				disposable = wetness,
+				reusable = wetness
+			}
+		});
+	}
+
+	public void SetWetMopRankOverlap(byte rankOverlap) {
+		UpdateOption(new {rankOverlap});
 	}
 }
